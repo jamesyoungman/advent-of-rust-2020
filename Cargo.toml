@@ -1,9 +1,13 @@
 [[bin]]
 name = "day01"
 
+[[bin]]
+name = "day02"
+
 [package]
 name = "aor2020"
 version = "0.1.0"
 authors = ["James Youngman <james@youngman.org>"]
 
 [dependencies]
+regex = "1"
