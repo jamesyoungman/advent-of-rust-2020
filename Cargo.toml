@@ -13,6 +13,9 @@ name = "day04"
 [[bin]]
 name = "day05"
 
+[[bin]]
+name = "day06"
+
 [package]
 name = "aor2020"
 version = "0.1.0"
@@ -21,3 +24,4 @@ authors = ["James Youngman <james@youngman.org>"]
 [dependencies]
 regex = "1"
 lazy_static = "1.3.0"
+itertools = ""
