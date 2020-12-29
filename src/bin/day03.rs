@@ -34,18 +34,14 @@ fn part1(tree_positions: &HashSet<Pos>,
 fn part2(tree_positions: &HashSet<Pos>,
 	 map_width: usize,
 	 slope_height: usize) -> usize {
-    let mut product: usize = 1;
-    let deltas = &[Pos{x: 1, y: 1},
-		   Pos{x: 3, y: 1},
-		   Pos{x: 5, y: 1},
-		   Pos{x: 7, y: 1},
-		   Pos{x: 1, y: 2}];
-    for d in deltas.iter() {
-	let count = count_trees(tree_positions, d.x, d.y,
-				map_width, slope_height);
-	product *= count;
-    }
-    product
+    [Pos{x: 1, y: 1},
+     Pos{x: 3, y: 1},
+     Pos{x: 5, y: 1},
+     Pos{x: 7, y: 1},
+     Pos{x: 1, y: 2}].iter()
+	.map(|d| count_trees(tree_positions, d.x, d.y,
+			     map_width, slope_height))
+	.fold(1, |prod, count| prod * count)
 }
 
 fn read_line(line: &str, y: usize,
