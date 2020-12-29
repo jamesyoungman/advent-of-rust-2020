@@ -56,13 +56,19 @@ fn part2(seats: &BTreeSet<i32>) {
     panic!("Part 2: there are no gaps in the boarding passes");
 }
 
-fn run() -> Result<(), std::io::Error> {
-    let seats: BTreeSet<i32> = io::BufReader::new(io::stdin()).lines()
-	.map(|l| decode_seat(&l.unwrap().as_str()))
+fn run() -> Result<(), String> {
+    let seats: Result<BTreeSet<i32>, _> = io::BufReader::new(io::stdin()).lines()
+	.map(|x| x.map_err(|e| format!("I/O error: {}", e)))
+	.map(|x| x.map(|good| decode_seat(&good.as_str())))
 	.collect();
-    part1(&seats);
-    part2(&seats);
-    Ok(())
+    match seats {
+	Ok(s) => {
+	    part1(&s);
+	    part2(&s);
+	    Ok(())
+	}
+	Err(e) => Err(e),
+    }
 }
 
 fn main() {
