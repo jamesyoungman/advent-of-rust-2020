@@ -6,15 +6,14 @@ extern crate itertools;
 
 
 fn union(s1: String, s2: &String) -> String {
-    let u1: BTreeSet<char> = s1.chars().collect();
     let u2: BTreeSet<char> = s2.chars().collect();
-    u1.union(&u2).collect()
+    s1.chars().collect::<BTreeSet<char>>()
+	.union(&u2).collect()
 }
 
 fn intersection(s1: String, s2: &String) -> String {
-    let u1: BTreeSet<char> = s1.chars().collect();
     let u2: BTreeSet<char> = s2.chars().collect();
-    u1.intersection(&u2).collect()
+    s1.chars().collect::<BTreeSet<char>>().intersection(&u2).collect()
 }
 
 // Each person is represented by a String containing their unique answers.
