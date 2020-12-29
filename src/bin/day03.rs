@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::io;
 use std::io::BufRead;
+use std::cmp::max;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 struct Pos {
@@ -66,9 +67,7 @@ fn read_map(reader: impl BufRead) -> Result<
 	match line_or_fail {
 	    Ok(line) => {
 		let w = read_line(&line, y, &mut tree_positions);
-		if w > map_width {
-		    map_width = w;
-		}
+		map_width = max(w, map_width);
 		slope_height = y + 1;
 	    }
 	    Err(e) => {
