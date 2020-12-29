@@ -58,8 +58,10 @@ fn part2(seats: &BTreeSet<i32>) {
 
 fn run() -> Result<(), String> {
     let seats: Result<BTreeSet<i32>, _> = io::BufReader::new(io::stdin()).lines()
-	.map(|x| x.map_err(|e| format!("I/O error: {}", e)))
-	.map(|x| x.map(|good| decode_seat(&good.as_str())))
+	.map(|x| match x {
+	    Err(e) => Err(format!("I/O error: {}", e)),
+	    Ok(line) => Ok(decode_seat(&line.as_str())),
+	})
 	.collect();
     match seats {
 	Ok(s) => {
