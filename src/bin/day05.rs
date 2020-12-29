@@ -5,11 +5,14 @@ use std::collections::BTreeSet;
 fn partition(mut lower_incl: i32, mut upper_excl: i32,
 	     lower_directive: char, upper_directive: char,
 	     choices: &str) -> Result<i32, &'static str> {
+    if lower_incl >= upper_excl {
+	return Err("empty starting range");
+    }
     for choice in choices.chars() {
 	if upper_excl == lower_incl + 1 {
 	    return Err("overdetermined: too many directives");
 	}
-	let mid = (upper_excl + lower_incl) / 2;
+	let mid = lower_incl + (upper_excl - lower_incl)/2;
 	if choice == lower_directive {
 	    upper_excl = mid
 	} else if choice == upper_directive {
@@ -31,7 +34,7 @@ fn seat_id(row: i32, col: i32) -> i32 {
 fn decode_seat(directions: &str) -> Result<i32, &'static str> {
     match (partition(0, 128, 'F', 'B', &directions[0..7]),
 	   partition(0, 8, 'L', 'R', &directions[7..])) {
-	(Ok(r), Ok(c)) => return Ok(seat_id(r, c)),
+	(Ok(r), Ok(c)) => Ok(seat_id(r, c)),
 	(Err(e), _) => Err(e),
 	(_, Err(e)) => Err(e),
     }
@@ -67,9 +70,9 @@ fn run() -> Result<(), String> {
 	.collect();
     match seats_or_error {
 	Ok(seats) => {
-	    part1(&seats).map_err(str::to_string)?;
-	    part2(&seats).map_err(str::to_string)?;
-	    return Ok(());
+            part1(&seats).map_err(str::to_string)?;
+            part2(&seats).map_err(str::to_string)?;
+            return Ok(());
 	}
 	Err(e) => Err(e),
     }
