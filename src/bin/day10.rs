@@ -1,10 +1,6 @@
-extern crate lazy_static;
 use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::io;
-use std::sync::Mutex;
-
-use lazy_static::lazy_static;
 
 fn differences(ratings: &Vec<i64>) -> Vec<(i64, i64)> {
     let mut result: Vec<(i64, i64)> = Vec::new();
@@ -92,66 +88,57 @@ fn bookend(ratings: &Vec<i64>, first: i64, last: i64) -> Vec<i64> {
 	.collect()
 }
 
-lazy_static! {
-    static ref trib_values: Mutex<BTreeMap<i64, i64>> = (|| {
+struct TribEval {
+    known: BTreeMap<i64, i64>
+}
+
+impl TribEval {
+    fn new() -> TribEval {
 	let mut m = BTreeMap::new();
 	m.insert(0, 1);
 	m.insert(1, 1);
 	m.insert(2, 2);
-	Mutex::new(m)
-    })();
+	TribEval {
+	    known: m,
+	}
+    }
+
+    fn tribonacci(&mut self, wanted: i64) -> i64 {
+	let mut largest = match self.known.keys().next_back() {
+	    None => {
+		panic!("trib_values is uninitialized");
+	    }
+	    Some(curr) => *curr,
+	};
+	while largest < wanted {
+	    largest += 1;
+	    let v = self.known.values().rev().take(3).sum();
+	    match self.known.insert(largest, v) {
+		Some(oldval) => {
+		    panic!("conflicting updates for tribonacci values");
+		}
+		None => ()		// this is the usual case.
+	    };
+	}
+	match self.known.get(&wanted) {
+	    Some(y) => *y,
+	    None => {
+		panic!(format!("tribonacci value for {} was not populated", wanted));
+	    }
+	}
+    }
 }
 
-fn tribonacci(n: i64) -> i64 {
-    if n < 0 {
-	panic!("tribonacci() is not implemented for negative n");
-    }
-    let mut bad_init = false;
-    let mut x = match trib_values.lock().unwrap().iter().next_back() {
-	None => {
-	    // Don't panic here because we don't want to poison the
-	    // mutex.
-	    bad_init = true;
-	    0
-	}
-	Some(curr) => *curr.0,
-    };
-    if bad_init {
-	panic!("trib_values is uninitialized");
-    }
-    let mut panic_later = false;
-    while x < n && !panic_later {
-	x += 1;
-	let mut t = trib_values.lock().unwrap();
-	let v = t.values().rev().take(3).sum();
-	match t.insert(x, v) {
-	    Some(oldval) => {
-		if oldval != v {
-		    // Don't panic here because we don't want to
-		    // poison the mutex.
-		    panic_later = true;
-		}
-	    }
-	    None => ()		// this is the usual case.
-	};
-	// t goes out of scope here, so the mutex is released.
-    }
-    if panic_later {
-	panic!("conflicting updates for trib_values");
-    }
-    // I think the second unwrap here is safe as there is no way to
-    // delete items from trib_values.
-    *(trib_values.lock().unwrap().get(&n).unwrap())
-}
 
 fn self_test() {
-    assert_eq!(tribonacci(0), 1);
-    assert_eq!(tribonacci(1), 1);
-    assert_eq!(tribonacci(2), 2);
-    assert_eq!(tribonacci(3), 4);
-    assert_eq!(tribonacci(4), 7);
-    assert_eq!(tribonacci(5), 13);
-    assert_eq!(tribonacci(6), 24);
+    let mut te = TribEval::new();
+    assert_eq!(te.tribonacci(0), 1);
+    assert_eq!(te.tribonacci(1), 1);
+    assert_eq!(te.tribonacci(2), 2);
+    assert_eq!(te.tribonacci(3), 4);
+    assert_eq!(te.tribonacci(4), 7);
+    assert_eq!(te.tribonacci(5), 13);
+    assert_eq!(te.tribonacci(6), 24);
 }
 
 
@@ -160,8 +147,9 @@ fn part2(ratings: &Vec<i64>, my_device_rating: i64) -> i64 {
     // Based on a hint from reddit.com/r/AdventOfCode.
     let runs = find_run_lengths(&bookend(ratings, 0, my_device_rating));
     let mut result: i64 = 1;
+    let mut te = TribEval::new();
     for run_len in runs {
-	result = result * tribonacci(run_len);
+	result = result * te.tribonacci(run_len);
     }
     println!("Part 2: answer is {}", result);
     result
