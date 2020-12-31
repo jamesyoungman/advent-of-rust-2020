@@ -25,37 +25,52 @@ fn find_pair(candidates: &VecDeque<i64>, n: &i64) -> Option<(i64, i64)> {
     return None
 }
 
-fn solve1(all_input: &Vec<i64>, preamble_len: usize) -> Option<i64> {
+fn solve1<T>(input: T, preamble_len: usize)
+	     -> Option<i64> where T: IntoIterator<Item=i64> {
     let mut candidates: VecDeque<i64> = VecDeque::new();
-    for n in all_input {
+    for n in input {
 	if candidates.len() > preamble_len {
 	    candidates.pop_back();
-	    print!("{} -> ", n);
-	    match find_pair(&candidates, &n) {
-		None => {
-		    println!("no match");
-		    return Some(*n);
-		}
-		Some((x, y)) => {
-		    println!("{},{}", x, y);
-		}
+	    if find_pair(&candidates, &n).is_none() {
+		return Some(n);
 	    }
 	}
-	candidates.push_front(*n);
+	candidates.push_front(n);
     }
     None
 }
 
-fn part1(all_input: &Vec<i64>, preamble_len: usize) {
-    match solve1(all_input, preamble_len) {
+fn min_max_sum<U: Ord + std::ops::AddAssign + Copy,
+	       T: std::iter::Iterator<Item=U>>(mut input: T) -> Option<(U, U, U)> {
+    match input.next() {
 	Some(n) => {
-	    println!("Part 1: invalid number is {}", n);
+	    let mut acc: (U, U, U) = (n, n, n);
+	    while let Some(n) = input.next() {
+		acc.2 += n;
+		acc = (std::cmp::min(acc.0, n),
+		       std::cmp::max(acc.1, n),
+		       acc.2);
+	    }
+	    Some(acc)
 	}
-	None => {
-	    println!("Part 1: did not find the invalid number");
-	}
+	None => None
     }
 }
+
+
+fn solve2(all_input: &Vec<i64>, target: i64) -> Option<(i64, i64)> {
+    for windowsize in 2..all_input.len() {
+	for w in all_input.windows(windowsize) {
+	    if let Some((wmin, wmax, wsum)) = min_max_sum(w.iter().cloned()) {
+		if wsum == target {
+		    return Some((wmin, wmax));
+		}
+	    }
+	}
+    }
+    None
+}
+
 
 fn run() -> Result<(), String> {
     let numbers: Vec<i64> = match io::BufReader::new(io::stdin())
@@ -63,8 +78,23 @@ fn run() -> Result<(), String> {
 	    Err(e) => return Err(e),
 	    Ok(numbers) => numbers,
 	};
-    part1(&numbers, 25);
-    Ok(())
+    let preamble_len = 25;
+    let n = match solve1(numbers.iter().cloned(), preamble_len) {
+	Some(n) => n,
+	None => {
+	    return Err("Part 1: did not find the invalid number".to_string());
+	}
+    };
+    println!("Part 1: invalid number is {}", n);
+    match solve2(&numbers, n) {
+	Some((least, most)) => {
+	    println!("Part 2: {} + {} = {}", least, most, (least+most));
+	    Ok(())
+	},
+	None => {
+	    Err("did not find a solution to part 2".to_string())
+	}
+    }
 }
 
 fn main() {
