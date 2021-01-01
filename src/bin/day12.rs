@@ -61,7 +61,6 @@ fn rotate(direction: &str,
 }
 
 fn part2(instructions: &Vec<String>) -> Result<(), String> {
-    let mut heading: i64 = 0;
     let mut ship_x: i64 = 0;
     let mut ship_y: i64 = 0;
     let mut waypoint_rel_x: i64 = 10;
@@ -88,7 +87,6 @@ fn part2(instructions: &Vec<String>) -> Result<(), String> {
 		return Err(format!("unknown instruction: {}", instruction));
 	    }
 	}
-	heading = normalise_heading(heading);
 	println!(
 	    "After instruction {:>6}, ship position=({:>6},{:>6}), waypoint=({:>3},{:3>})",
 	    line, ship_x, ship_y, waypoint_rel_x, waypoint_rel_y);
