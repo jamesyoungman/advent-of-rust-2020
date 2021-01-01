@@ -31,25 +31,10 @@ fn seat_occupation(p: &Position) -> usize {
     }
 }
 
-fn possible_seat_occupation(p: Option<&Position>) -> usize {
-    match p {
-	Some(Position::Seat(true)) => 1,
-	_ => 0
-    }
-}
-
-fn row_occupation(row: &Vec<Position>) -> usize {
-    row.iter().map(seat_occupation).sum()
-}
-
 #[derive(Debug)]
 struct Direction {
     dx: i64,
     dy: i64,
-}
-
-fn neighbour(x: i64, y: i64, d: &Direction) -> (i64, i64) {
-    (x + d.dx, y + d.dy)
 }
 
 static ALL_DIRECTIONS: [Direction; 8] = [
@@ -62,8 +47,6 @@ static ALL_DIRECTIONS: [Direction; 8] = [
     Direction{dx: -1, dy: 0},	// W
     Direction{dx: -1, dy: -1},	// NW
 ];
-
-
 
 
 struct Grid {
@@ -84,7 +67,6 @@ impl fmt::Display for Grid {
     }
 }
 
-
 impl Clone for Grid {
     fn clone(&self) -> Self {
 	Grid{
@@ -94,6 +76,25 @@ impl Clone for Grid {
     }
 }
 
+fn get_next(current: &Position,
+	    neighbour_count: usize,
+	    overcrowding_limit: usize) -> (Position, bool) {
+    match (current, neighbour_count) {
+	// An empty seat becomes occupied if there are no
+	// occupied neighbour seats
+	(Position::Seat(false), 0) => {
+	    (Position::Seat(true), true)
+	}
+	// An occupied seat becomes empty if there are too many
+	// occupied neighbour seats
+	(Position::Seat(true), n) if n >= overcrowding_limit => {
+	    (Position::Seat(false), true)
+	}
+	(Position::Floor, _) => (Position::Floor, false),
+	// Otherwise the seat is unchanged.
+	_ => (*current, false),
+    }
+}
 
 impl Grid {
     fn new(lines: &Vec<String>) -> Result<Grid, String> {
@@ -131,15 +132,14 @@ impl Grid {
 	})
     }
 
-    fn width(&self) -> usize {
-	self.grid_width
-    }
-
     fn height(&self) -> usize {
 	self.seats.len()
     }
 
     fn total_occupation(&self) -> usize {
+	fn row_occupation(row: &Vec<Position>) -> usize {
+	    row.iter().map(seat_occupation).sum()
+	}
 	self.seats.iter().map(row_occupation).sum()
     }
 
@@ -155,27 +155,14 @@ impl Grid {
 	}
     }
 
-    fn occupation(&self, x: i64, y: i64, d: &Direction, debug: bool) -> usize {
-	let pos = neighbour(x, y, d);
-	let result = possible_seat_occupation(self.at(pos.0, pos.1));
-	if debug {
-	    println!("occupation: ({},{}) -> {:?}", pos.0, pos.1, result);
-	}
-	result
-    }
-
-    fn immediate_neighbours_occupied(&self, x: i64, y: i64,
-				     debug: bool) -> Result<usize, String> {
-	let mut total = 0;
-	for d in &ALL_DIRECTIONS {
-	    let occ = self.occupation(x, y, d, debug);
-	    if debug {
-		println!("immediate_neighbours_occupied: ({},{}) has {} occupied neighbours in the {:?} direction",
-			 x, y, occ, d);
-	    }
-	    total += occ;
-	}
-	Ok(total)
+    fn immediate_neighbours_occupied(&self, x: i64, y: i64) -> usize {
+	ALL_DIRECTIONS.iter()
+	   .map(|d|
+		match self.at(x + d.dx, y + d.dy) {
+		    Some(Position::Seat(true)) => 1,
+		    _ => 0,
+		})
+	   .sum()
     }
 
     fn line_of_sight_neighbour(&self, x: i64, y: i64, d: &Direction) -> usize {
@@ -202,53 +189,33 @@ impl Grid {
 	panic!("an infinite loop terminated");
     }
 
-    fn line_of_sight_neighbours_occupied(&self, x: i64, y: i64,
-					 debug: bool) -> Result<usize, String> {
+    fn line_of_sight_neighbours_occupied(&self, x: i64, y: i64) -> usize {
 	let mut total: usize = 0;
 	for d in &ALL_DIRECTIONS {
 	    let occ: usize = self.line_of_sight_neighbour(x, y, d);
-	    if debug {
-		println!("line_of_sight_neighbour: ({},{}) has {} occupied neighbours in the {:?} direction",
-			 x, y, occ, d);
-	    }
 	    total += occ;
 	}
-	Ok(total)
+	total
     }
 
     fn iterate<OccCounter>(&self,
 	       neighbour_counter: OccCounter,
 	       overcrowding_limit: usize) -> Result<(Grid, bool), String>
-    where OccCounter: Fn(&Grid, i64, i64, bool)->Result<usize, String> {
-	let debug = false;
+    where OccCounter: Fn(&Grid, i64, i64) -> usize {
 	let mut changed: bool = false;
 	let mut next: Vec<Vec<Position>> = Vec::new();
 	next.resize_with(self.height(), Vec::new);
 	for (y, row) in self.seats.iter().enumerate() {
 	    next[y].resize(self.height(), Position::Floor);
 	    for (x, current) in row.iter().enumerate() {
-		//let debug = x == 2 && y == 0;
-		let nc = neighbour_counter(self, x as i64, y as i64, debug);
-		if debug {
-		    println!("debug: (2,0) neighbour count={:?}", nc);
-		}
-		next[y][x] = match (current, nc) {
-		    // An empty seat becomes occupied if there are no
-		    // occupied neighbour seats
-		    (Position::Seat(false), Ok(0)) => {
-			changed = true;
-			Position::Seat(true)
+		let nc: usize = neighbour_counter(self, x as i64, y as i64);
+		match get_next(current, nc, overcrowding_limit) {
+		    (p, change) => {
+			if change {
+			    changed = true;
+			}
+			next[y][x] = p;
 		    }
-		    // An occupied seat becomes empty if there are too many
-		    // occupied neighbour seats
-		    (Position::Seat(true), Ok(n)) if n >= overcrowding_limit => {
-			changed = true;
-			Position::Seat(false)
-		    }
-		    (_, Err(e)) => { return Err(e); }
-		    (Position::Floor, Ok(_)) => Position::Floor,
-		    // Otherwise the seat is unchanged.
-		    _ => *current,
 		}
 	    }
 	}
@@ -278,7 +245,7 @@ fn read_input(reader: impl BufRead) -> Result<Grid, String> {
 fn iterate_until_stable<OccCounter>(initial: &Grid,
 				    occ_counter: &OccCounter,
 				    overcrowding_limit: usize) -> Result<(i64, Grid), String>
-where OccCounter: Fn(&Grid, i64, i64, bool)->Result<usize, String> {
+where OccCounter: Fn(&Grid, i64, i64) -> usize {
     let mut current: Grid = initial.clone();
     for iteration in 1.. {
 	//println!("iterate_until_stable: iteration {}:\n{}",
@@ -304,10 +271,12 @@ fn solve<OccCounter>(description: &str,
 		     initial: &Grid,
 		     occ_counter: &OccCounter,
 		     overcrowding_limit: usize) -> Result<(), String>
-where OccCounter: Fn(&Grid, i64, i64, bool)->Result<usize, String> {
+where OccCounter: Fn(&Grid, i64, i64)-> usize {
     println!("{}: initial state:\n{}", description, initial);
     println!("{}: initial seat occupation is {}", description, initial.total_occupation());
-    match iterate_until_stable(initial, occ_counter, overcrowding_limit) {
+    let end_state: Result<(i64, Grid), String> = iterate_until_stable(
+	initial, occ_counter, overcrowding_limit);
+    match end_state {
 	Ok((iterations, final_grid)) => {
 	    println!("{}: stable after {} iterations:\n{}\n{} seats are occupied.",
 		     description, iterations, final_grid, final_grid.total_occupation());
@@ -317,18 +286,10 @@ where OccCounter: Fn(&Grid, i64, i64, bool)->Result<usize, String> {
     }
 }
 
-fn part1(initial: &Grid) -> Result<(), String> {
-    solve("Part 1", initial, &Grid::immediate_neighbours_occupied, 4)
-}
-
-fn part2(initial: &Grid) -> Result<(), String> {
-    solve("Part 2", initial, &Grid::line_of_sight_neighbours_occupied, 5)
-}
-
 fn run() -> Result<(), String> {
     let initial = read_input(io::BufReader::new(io::stdin()))?;
-    part1(&initial)?;
-    part2(&initial)?;
+    solve("Part 1", &initial, &Grid::immediate_neighbours_occupied, 4)?;
+    solve("Part 2", &initial, &Grid::line_of_sight_neighbours_occupied, 5)?;
     Ok(())
 }
 
