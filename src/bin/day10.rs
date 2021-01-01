@@ -114,7 +114,7 @@ impl TribEval {
 	    largest += 1;
 	    let v = self.known.values().rev().take(3).sum();
 	    match self.known.insert(largest, v) {
-		Some(oldval) => {
+		Some(_) => {
 		    panic!("conflicting updates for tribonacci values");
 		}
 		None => ()		// this is the usual case.
@@ -159,7 +159,7 @@ fn part2(ratings: &Vec<i64>, my_device_rating: i64) -> i64 {
 fn run() -> Result<(), String> {
     self_test();
     let ratings = sorted_integer_input()?;
-    let (diffs, my_device_rating) = part1(&ratings);
+    let (_, my_device_rating) = part1(&ratings);
     part2(&ratings, my_device_rating);
     Ok(())
 }
