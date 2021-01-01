@@ -1,6 +1,5 @@
 extern crate itertools;
 
-use std::fmt;
 use std::io::BufRead;
 use std::string::String;
 use std::io;
@@ -13,7 +12,7 @@ static DIRECTIONS: &'static [(i64, i64, &str)] = &[(1,0,"East"),
 fn normalise_heading(mut h: i64) -> i64 {
     let n = DIRECTIONS.len() as i64;
     while h >= n {
-        h -= h;
+        h -= n;
     }
     while h < 0 {
         h += n;
@@ -114,8 +113,8 @@ fn part1(instructions: &Vec<String>) -> Result<(), String> {
 	    "L" => { heading -= amount/90 }
 	    "F" => {
 		assert!(heading >= 0);
-		x += (DIRECTIONS[heading as usize].0 * amount);
-		y += (DIRECTIONS[heading as usize].1 * amount);
+		x += DIRECTIONS[heading as usize].0 * amount;
+		y += DIRECTIONS[heading as usize].1 * amount;
 	    }
 	    _ => {
 		return Err(format!("unknown instruction: {}", instruction));
