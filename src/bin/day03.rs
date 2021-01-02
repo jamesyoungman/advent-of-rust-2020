@@ -42,7 +42,7 @@ fn part2(tree_positions: &HashSet<Pos>,
      Pos{x: 1, y: 2}].iter()
 	.map(|d| count_trees(tree_positions, d.x, d.y,
 			     map_width, slope_height))
-	.fold(1, |prod, count| prod * count)
+	.product()
 }
 
 fn read_line(line: &str, y: usize,
