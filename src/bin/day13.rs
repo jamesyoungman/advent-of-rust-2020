@@ -66,37 +66,25 @@ fn part1(earliest: &i64, bus_ids: &Vec<String>) -> Result<(), String> {
 
 fn read_input(reader: impl BufRead) -> Result<(i64, Vec<String>), String> {
     let mut it = reader.lines();
-    let earliest: i64 = match it.next() {
-	None => { return Err("premature EOF".to_string()); }
-	Some(Ok(s)) => {
-	    match s.parse() {
-		Err(e) => {
-		    return Err(format!("unable to parse integer from input '{}': {}", s, e));
-		}
-		Ok(n) => n,
+    let mut getline = || {
+	match it.next() {
+	    None => {
+		return Err("premature end of file".to_string());
 	    }
-	}
-	Some(Err(e)) => {
-	    return Err(format!("I/O error: {}", e));
-	}
-    };
-    let id_line: String = match it.next() {
-	None => { return Err("premature EOF".to_string()); }
-	Some(Ok(s)) => s,
-	Some(Err(e)) => {
-	    return Err(format!("I/O error: {}", e));
+	    Some(Err(e)) => {
+		return Err(format!("I/O error: {}", e));
+	    }
+	    Some(Ok(s)) => Ok(s),
 	}
     };
-    match it.next() {
-	None => (),
-	Some(Err(e)) => {
-	    return Err(format!("I/O error: {}", e));
+
+    let earliest: i64 = match getline()?.parse() {
+	Err(e) => {
+	    return Err(format!("unable to parse integer from input: {}", e));
 	}
-	Some(Ok(s)) => {
-	    return Err(format!("expected only 2 lines of input, did not expect: {}", s));
-	}
+	Ok(n) => n,
     };
-    let result: Vec<String> = id_line.split(",").map(|s| s.to_string()).collect();
+    let result: Vec<String> = getline()?.split(",").map(|s| s.to_string()).collect();
     Ok((earliest, result))
 }
 
