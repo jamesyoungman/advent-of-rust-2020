@@ -2,7 +2,7 @@ use std::io;
 use std::io::BufRead;
 use std::collections::BTreeSet;
 
-fn partition(mut lower_incl: i32, mut upper_excl: i32,
+fn binary_search(mut lower_incl: i32, mut upper_excl: i32,
 	     lower_directive: char, upper_directive: char,
 	     choices: &str) -> Result<i32, &'static str> {
     if lower_incl >= upper_excl {
@@ -32,8 +32,8 @@ fn seat_id(row: i32, col: i32) -> i32 {
 }
 
 fn decode_seat(directions: &str) -> Result<i32, &'static str> {
-    match (partition(0, 128, 'F', 'B', &directions[0..7]),
-	   partition(0, 8, 'L', 'R', &directions[7..])) {
+    match (binary_search(0, 128, 'F', 'B', &directions[0..7]),
+	   binary_search(0, 8, 'L', 'R', &directions[7..])) {
 	(Ok(r), Ok(c)) => Ok(seat_id(r, c)),
 	(Err(e), _) => Err(e),
 	(_, Err(e)) => Err(e),
