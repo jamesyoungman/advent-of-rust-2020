@@ -87,6 +87,15 @@ fn read_input(reader: impl BufRead) -> Result<(i64, Vec<String>), String> {
 	    return Err(format!("I/O error: {}", e));
 	}
     };
+    match it.next() {
+	None => (),
+	Some(Err(e)) => {
+	    return Err(format!("I/O error: {}", e));
+	}
+	Some(Ok(s)) => {
+	    return Err(format!("expected only 2 lines of input, did not expect: {}", s));
+	}
+    };
     let result: Vec<String> = id_line.split(",").map(|s| s.to_string()).collect();
     Ok((earliest, result))
 }
