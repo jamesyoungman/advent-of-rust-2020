@@ -100,16 +100,16 @@ fn modinv(u: i64, v: i64) -> Option<i64> {
 }
 
 
-// Find a congruent value t where t == residues[i] mod moduli[i] for all i.
-// Returns (t, M) where M is moduli.iter().product().
-fn crt(residues: &[i64], moduli: &[i64]) -> (i64, i64) {
-    // Determine a value t for which (t mod moduli[i]) == residues[i]
-    // for all i.  residues and moduli must be the same length.
-    assert_eq!(residues.len(), moduli.len());
-    assert!(moduli.iter().all(|m| *m > 0)); // otherwise we need more care in use of %.
-    let p = moduli.iter().product();
+// Find a congruent value t where for all i,
+//  t == residue[i] mod modulus[i]
+// Returns (t, M) where M is the product of the moduli.
+fn crt(residues_and_moduli: &[(i64, i64)]) -> (i64, i64) {
+    // If any modulus is negative we would need need to change the
+    // code to exercise more care in use of %.
+    assert!(residues_and_moduli.iter().all(|rm| rm.1 > 0));
+    let p = residues_and_moduli.iter().map(|rm| rm.1).product();
     let mut v = 0;
-    for (u, m) in itertools::zip(residues, moduli) {
+    for (u, m) in residues_and_moduli.iter() {
 	let e = p / m;
 	// The use of % to compute moduli here depends on the fact
 	// that our modinv implementation never returns s < 0.
@@ -124,20 +124,13 @@ fn crt(residues: &[i64], moduli: &[i64]) -> (i64, i64) {
 
 fn solve2(bus_ids: &Vec<String>) -> Result<i64, String> {
     let buses: Vec<(i64, i64)> = ids_with_positions(bus_ids)?;
-    let (residues, moduli): (Vec<i64>, Vec<i64>) = buses.iter().cloned().unzip();
-    //println!("solve2: residues={}", itertools::join(&residues, ", "));
-    //println!("solve2: moduli  ={}", itertools::join(&moduli, ", "));
-    let (n, mm): (i64, i64) = crt(&residues, &moduli);
-    //println!("solve2: mm      ={}", mm);
-    let adj = if n < 0 {
-	mm + n
-    } else if mm - n > 0 {
-	mm - n
+    let (n, mm): (i64, i64) = crt(&buses);
+    assert!(n >= 0);
+    if mm - n > 0 {
+	Ok(mm - n)
     } else {
-	n
-    };
-    //demo("adj", &residues, &moduli, adj)?;
-    Ok(adj)
+	Ok(n)
+    }
 }
 
 fn part2(bus_ids: &Vec<String>) -> Result<(), String> {
