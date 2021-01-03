@@ -66,15 +66,6 @@ fn part1(earliest: &i64, bus_ids: &Vec<String>) -> Result<(), String> {
 }
 
 
-fn posmod(a: i64, m: i64) -> i64 {
-    let r = a % m;
-    if r < 0 {
-	r + m
-    } else {
-	r
-    }
-}
-
 fn modinv(u: i64, v: i64) -> Option<i64> {
     // Determines the multiplicative inverse of u modulo v, returning
     // a value >= 0 or None if no inverse exists.  This is based on
@@ -109,21 +100,24 @@ fn modinv(u: i64, v: i64) -> Option<i64> {
 }
 
 
-
 // Find a congruent value t where t == residues[i] mod moduli[i] for all i.
 // Returns (t, M) where M is moduli.iter().product().
 fn crt(residues: &[i64], moduli: &[i64]) -> (i64, i64) {
     // Determine a value t for which (t mod moduli[i]) == residues[i]
     // for all i.  residues and moduli must be the same length.
     assert_eq!(residues.len(), moduli.len());
+    assert!(moduli.iter().all(|m| *m > 0)); // otherwise we need more care in use of %.
     let p = moduli.iter().product();
     let mut v = 0;
     for (u, m) in itertools::zip(residues, moduli) {
 	let e = p / m;
+	// The use of % to compute moduli here depends on the fact
+	// that our modinv implementation never returns s < 0.
 	let s = modinv(e, *m).expect("e has no multiplicative inverse mod m");
-	v += e * (u * posmod(s, *m));
+	assert!(s >= 0);
+	v += e * (u * (s % *m));
     }
-    let result = posmod(v, p);
+    let result = v % p;
     (result, p)
 }
 
