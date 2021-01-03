@@ -82,27 +82,27 @@ fn modinv(u: i64, v: i64) -> Option<i64> {
     // (Seminumerical Algorithms, section 4.5.2 "The Greatest Common
     // Divisor").
     //
-    #[allow(non_snake_case)]
-    let mut U: (i64, i64, i64) = (1, 0, u);
-    #[allow(non_snake_case)]
-    let mut V: (i64, i64, i64) = (0, 1, v);
+    // Since we're only trying to find one multiplicative inverse
+    // and not the gcd, we don't require Knuth's u2 or v2.
+    let (mut u1, mut u3): (i64, i64) = (1, u);
+    let (mut v1, mut v3): (i64, i64) = (0, v);
     let mut iter = 1;		// sign of iter flips each iteration.
-    while V.2 != 0 {
+    while v3 != 0 {
 	// Step X3.
-	let q = U.2 / V.2;
-	let t2 = U.2 % V.2;
-	let t0 = U.0 + V.0 * q;
-	U.0 = V.0;
-	V.0 = t0;
-	U.2 = V.2;
-	V.2 = t2;
+	let q = u3 / v3;
+	let t3 = u3 % v3;
+	let t1 = u1 + v1 * q;
+	u1 = v1;
+	v1 = t1;
+	u3 = v3;
+	v3 = t3;
 	iter = -iter;
     }
-    match U.2 {
+    match u3 {
 	1 => if iter < 0 {
-	    Some(v - U.0)
+	    Some(v - u1)
 	} else {
-	    Some(U.0)
+	    Some(u1)
 	}
 	_ => None,
     }
