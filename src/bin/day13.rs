@@ -73,6 +73,9 @@ fn modinv(u: i64, v: i64) -> Option<i64> {
     // (Seminumerical Algorithms, section 4.5.2 "The Greatest Common
     // Divisor").
     //
+    // The non-negativity of the results of this function are a key
+    // feature of this solution.
+    //
     // Since we're only trying to find one multiplicative inverse
     // and not the gcd, we don't require Knuth's u2 or v2.
     let (mut u1, mut u3): (i64, i64) = (1, u);
