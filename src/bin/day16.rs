@@ -2,24 +2,33 @@ extern crate itertools;
 extern crate lazy_static;
 extern crate regex;
 
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use std::fmt;
 use regex::Regex;
 use std::ops::RangeInclusive;
 use std::io;
 use std::io::BufRead;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 lazy_static! {
     static ref FIELD_RE: Regex = Regex::new(
 	r"^([^:]*): (\d+)-(\d+) or (\d+)-(\d+)$").unwrap();
 }
 
+#[derive(Clone)]
 struct Field {
     name: String,
     first: RangeInclusive<i32>,
     second: RangeInclusive<i32>,
 }
+
+impl Field {
+    fn is_valid_value(&self, v: &i32) -> bool {
+	self.first.contains(&v) || self.second.contains(&v)
+    }
+}
+
 
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -85,12 +94,7 @@ struct Input {
 
 impl Input {
     fn is_valid_value(&self, v: &i32) -> bool {
-	for f in &self.fields {
-	    if f.first.contains(v) || f.second.contains(v) {
-		return true;
-	    }
-	}
-	return false;
+	self.fields.iter().any(|f| f.is_valid_value(v))
     }
 }
 
@@ -207,6 +211,81 @@ fn part1(input: &Input) -> Result<Vec<Ticket>, String> {
 }
 
 
+fn compute_candidates(fields_by_name: &HashMap<String, Field>,
+		      field_position: &HashMap<String, i32>,
+		      nf: usize,
+		      valid_tickets: &Vec<Ticket>) -> HashMap<String, Vec<i32>> {
+    let mut candidates: HashMap<String, Vec<i32>> = HashMap::new();
+    let known_field_numbers: HashSet<i32> = field_position.values().cloned().collect();
+    for i in 0..nf {
+	if known_field_numbers.contains(&(i as i32)) {
+	    continue
+	}
+	for (field_name, f) in fields_by_name.iter() {
+	    if field_position.contains_key(field_name) {
+		continue;
+	    }
+	    let mut invalid: bool = false;
+	    for t in valid_tickets {
+		let v = &t.values.get(i).unwrap();
+		if  !f.is_valid_value(v) {
+		    invalid = true;
+		    break;
+		}
+	    }
+	    if !invalid {
+		candidates.entry(field_name.to_string())
+		    .or_insert(Vec::new()).push(i as i32)
+	    }
+	}
+    }
+    candidates
+}
+
+fn part2(input: &Input, valid_tickets: &Vec<Ticket>) -> Result<(), String> {
+    let nf: usize = valid_tickets.get(0).unwrap().values.len();
+    let odd_length_tickets: usize = valid_tickets.iter()
+	.filter(|t| t.values.len() != nf)
+	.count();
+    assert_eq!(0, odd_length_tickets);
+    let mut fields_by_name: HashMap<String, Field> = HashMap::new();
+    let mut fields_todo: HashSet<String> = HashSet::new();
+    let mut field_positions: HashMap<String, i32> = HashMap::new();
+    for f in &input.fields {
+	fields_by_name.insert(f.name.clone(), f.clone());
+	fields_todo.insert(f.name.clone());
+    }
+    for iter in 1.. {
+	if fields_todo.is_empty() {
+	    break;
+	}
+	let mut progress = false;
+	println!("iteration {}: unknown: {} fields ({:?})\nknown: {:?}",
+		 iter, fields_todo.len(), fields_todo, field_positions);
+
+	let candidates = compute_candidates(&fields_by_name, &field_positions, nf,
+					    &valid_tickets);
+	for (name, cands) in candidates {
+	    println!("candidates for field {}: {:?}", name, cands);
+	    if cands.len() == 1 {
+		let only = cands.iter().next().unwrap();
+		field_positions.insert(name.to_string(), *only);
+		println!("field {} must be at position {:?}",
+			 name, &field_positions.get(&name).unwrap());
+		assert!(fields_todo.remove(&name));
+		progress = true;
+	    }
+	}
+	assert!(progress);
+    }
+    let ans: i64 = field_positions.iter()
+	.filter(|(name, _)| name.starts_with("departure"))
+	.map(|(_, pos)| input.my_ticket.values[*pos as usize] as i64)
+	.product();
+    println!("Part 2: product = {}", ans);
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let mut input_lines: Vec<String> = Vec::new();
     for input_item in io::BufReader::new(io::stdin()).lines() {
@@ -222,7 +301,7 @@ fn run() -> Result<(), String> {
     let input = read_input(input_lines)?;
     println!("Day 16: input:\n{}", input);
     let valid_tickets = part1(&input)?;
-    //22part2()?;
+    part2(&input, &valid_tickets)?;
     Ok(())
 }
 
