@@ -4,7 +4,6 @@ extern crate regex;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::io;
 use std::io::BufRead;
 
@@ -19,16 +18,6 @@ enum Operation {
     SetMask(String),
     Store(i64, i64),
 }
-
-impl fmt::Display for Operation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-	match self {
-	    Operation::SetMask(s) => write!(f, "mask = {}", s),
-	    Operation::Store(addr, val) => write!(f, "mem[{}] = {}", addr, val),
-	}
-    }
-}
-
 
 fn parse_line(s: &str) -> Result<Operation, String> {
     match SETMASK_RE.captures(s) {
@@ -66,15 +55,15 @@ where OPZ: Iterator<Item = &'a Operation> {
 	    }
 	    Operation::Store(addr, val) => {
 		let mut locations : Vec<i64> = vec![addr | or_mask];
+		locations.reserve(72);
 		for bitnum in 0..=36 {
 		    let mask = 1 << bitnum;
 		    if (float_mask & mask) != 0 {
-			let mut updated_locations: Vec<i64> = Vec::new();
-			for loc in locations {
-			    updated_locations.push(loc & !mask); // X turns to 0
-			    updated_locations.push(loc | mask); // X turns to 1
+			for i in 0..locations.len() {
+			    let old = locations[i];
+			    locations[i] |= mask;        // X turns to 1
+			    locations.push(old & !mask); // X turns to 0
 			}
-			locations = updated_locations;
 		    }
 		}
 		for loc in locations {
@@ -122,10 +111,7 @@ fn read_input(reader: impl BufRead) -> Result<Vec<Operation>, String> {
     for thing in reader.lines() {
 	match thing {
 	    Err(e) => return Err(format!("I/O error: {}", e)),
-	    Ok(line) => match parse_line(&line) {
-		Ok(op) => ops.push(op),
-		Err(e) => return Err(e),
-	    }
+	    Ok(line) => ops.push(parse_line(&line)?),
 	}
     }
     Ok(ops)
