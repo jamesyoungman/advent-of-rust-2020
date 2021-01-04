@@ -40,6 +40,9 @@ name = "day13"
 [[bin]]
 name = "day14"
 
+[[bin]]
+name = "day15"
+
 [package]
 name = "aor2020"
 version = "0.1.0"
