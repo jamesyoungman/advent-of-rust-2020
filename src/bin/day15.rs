@@ -22,7 +22,11 @@ fn playgame(start_numbers: &[usize], turns: &usize, verbose: bool) -> Option<usi
 		print!("saying start number {}; ", this_number);
 	    }
 	} else {
-	    let when = turns_spoken.entry(last_number.unwrap()).or_insert(VecDeque::new());
+	    let ln = last_number.unwrap();
+	    if !turns_spoken.contains_key(&ln) {
+		turns_spoken.insert(ln, VecDeque::new());
+	    }
+	    let when = turns_spoken.get_mut(&ln).unwrap();
 	    if when.len() == 1 {
 		if verbose {
 		    print!("number {} has never been said before, saying zero; ",
