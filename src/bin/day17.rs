@@ -1,12 +1,14 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::RangeInclusive;
 use std::io::{self, Read};
+use std::cmp::{min, max};
 use std::fmt;
 
 type Ordinate = i32;
 type OrdinateRange = RangeInclusive<i32>;
 
-#[derive(Copy,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
+#[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
 struct Pos4
 {
     x: Ordinate,
@@ -15,13 +17,26 @@ struct Pos4
     w: Ordinate,
 }
 
+type Pos4Set = HashSet<Pos4>;
+type Pos4Counter = HashMap<Pos4, usize>;
+
 struct Lattice {
     xrange: OrdinateRange,
     yrange: OrdinateRange,
     zrange: OrdinateRange,
     wrange: OrdinateRange,
-    active: HashSet<Pos4>
+    active: Pos4Set,
+    use_w: bool
 }
+
+fn update_range(n: &Ordinate, r: OrdinateRange) -> OrdinateRange {
+    if r.contains(n) {
+	r
+    } else {
+	min(*n, *r.start())..=max(*n, *r.end())
+    }
+}
+
 
 fn range_size(r: &OrdinateRange) -> usize {
     if r.end() < r.start() {
@@ -33,7 +48,24 @@ fn range_size(r: &OrdinateRange) -> usize {
     }
 }
 
+impl Clone for Lattice {
+    fn clone(&self) -> Lattice {
+	Lattice{
+	    xrange: self.xrange.clone(),
+	    yrange: self.yrange.clone(),
+	    zrange: self.zrange.clone(),
+	    wrange: self.wrange.clone(),
+	    active: self.active.clone(),
+	    use_w: self.use_w,
+	}
+    }
+}
+
 impl Lattice {
+    fn popcount(&self) -> usize {
+	self.active.len()
+    }
+
     fn slice_as_str(&self, w: Ordinate, z: Ordinate) -> String {
 	let mut output = String::with_capacity(
 	    range_size(&self.xrange) * range_size(&self.yrange));
@@ -52,7 +84,7 @@ impl Lattice {
 	let mut yrange: OrdinateRange = 0..=0;
 	let mut x = 0;
 	let mut y = 0;
-	let mut cells: HashSet<Pos4> = HashSet::new();
+	let mut cells: Pos4Set = Pos4Set::new();
 	for ch in s.chars() {
 	    match ch {
 		'#' => {
@@ -83,7 +115,97 @@ impl Lattice {
 	    zrange: 0..=0,
 	    wrange: 0..=0,
 	    active: cells,
+	    use_w: false,
 	})
+    }
+
+    fn neighbours_of(&self, pos: &Pos4) -> Vec<Pos4> {
+	let wrange = if self.use_w {
+	    (pos.w-1)..=(pos.w+1)
+	} else {
+	    pos.w..=pos.w
+	};
+	let mut result = Vec::with_capacity(range_size(&wrange) * 3 * 3 * 3);
+	for w in wrange {
+	    for z in (pos.z-1)..=(pos.z+1) {
+		for y in (pos.y-1)..=(pos.y+1) {
+		    for x in (pos.x-1)..=(pos.x+1) {
+			let neighbour = Pos4{w, z, y, x};
+			if neighbour != *pos {
+			    result.push(neighbour);
+			}
+		    }
+		}
+	    }
+	}
+	result
+    }
+
+    fn insert(&mut self, pos: Pos4) {
+	if !self.use_w {
+	    assert!(pos.w == 0)
+	}
+	self.active.insert(pos);
+	self.xrange = update_range(&pos.x, self.xrange.clone());
+	self.yrange = update_range(&pos.y, self.yrange.clone());
+	self.zrange = update_range(&pos.z, self.zrange.clone());
+	self.wrange = update_range(&pos.w, self.wrange.clone());
+    }
+
+    fn iterate(&self) -> Lattice {
+	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
+	for pos in self.active.iter() {
+		if !self.use_w {
+		    assert!(pos.w == 0)
+		}
+	    let neighbours = self.neighbours_of(&pos);
+	    for neighbour in neighbours {
+		if !self.use_w {
+		    assert!(neighbour.w == 0)
+		}
+		//println!("{:?} is an active neighbour of {:?}", pos, neighbour);
+		neighbour_count.entry(neighbour).and_modify(|e| *e += 1).or_insert(1);
+	    }
+	}
+	//for (pos, n) in neighbour_count.iter() {
+	//    println!("{:?} has {} active neighbours", pos, n);
+	//}
+	//println!("iterate: we evaluated neighbour counts for {} cells",
+	//	 neighbour_count.len());
+	let mut next = Lattice {
+	    xrange: 0..=0,
+	    yrange: 0..=0,
+	    zrange: 0..=0,
+	    wrange: 0..=0,
+	    active: Pos4Set::new(),
+	    use_w: self.use_w,
+	};
+
+	for currently_active in self.active.iter() {
+	    if !self.use_w {
+		assert!(currently_active.w == 0)
+	    }
+	    match neighbour_count.get(&currently_active) {
+		Some(2) | Some(3) => {
+		    next.insert(*currently_active); // unchanged
+		}
+		_ => (),	// becomes inactive
+	    }
+	}
+	for (pos, neighbours) in neighbour_count.iter() {
+	    let active = self.active.contains(pos);
+	    match (active, neighbours) {
+		(true, _) => (), // already considered above
+		(false, 3) => {
+		    if !self.use_w {
+			assert!(pos.w == 0)
+		    }
+		    next.insert(*pos); // becomes active
+		}
+		(false, _) => (), // remains inactive
+	    }
+	}
+	next
     }
 }
 
@@ -109,9 +231,30 @@ fn read_input() -> Result<Lattice, String> {
     }
 }
 
+fn cycles(initial: &Lattice, cycles: usize) -> Lattice {
+    let mut current: Lattice = initial.iterate();
+    for iteration in 1..cycles {
+	println!("After {} cycle:\n{}", iteration, current);
+	current = current.iterate();
+    }
+    println!("Finally at {} cycles:\n{}", cycles, current);
+    current
+}
+
+fn part_n(part_num: i32, initial: &Lattice, num_cycles: usize, use_w: bool) {
+    let mut begin: Lattice = initial.clone();
+    begin.use_w = use_w;
+    let updated = cycles(&begin, num_cycles);
+    println!("Part {}: after {} iterations, population is {}",
+	     part_num, num_cycles, updated.popcount());
+}
+
+
 fn run() -> Result<(), String> {
     let initial = read_input()?;
     println!("Initial state is:\n{}", initial);
+    part_n(1, &initial, 6, false);
+    //part_n(2, &initial, 6, true);
     Ok(())
 }
 
