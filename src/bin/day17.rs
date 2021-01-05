@@ -150,43 +150,47 @@ impl Lattice {
 
     fn iterate(&self) -> Lattice {
 	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
-	for pos in self.active.iter() {
-	    for neighbour in self.neighbours_of(&pos) {
-		neighbour_count.entry(neighbour).and_modify(|e| *e += 1).or_insert(1);
+	for neighbour in self.active.iter()
+	    .flat_map(|pos| self.neighbours_of(&pos)) {
+		neighbour_count.entry(neighbour)
+		    .and_modify(|e| *e += 1)
+		    .or_insert(1);
 	    }
-	}
 
-	let mut next = Lattice {
+	let mut result = Lattice{
 	    xrange: 0..=0,
 	    yrange: 0..=0,
 	    zrange: 0..=0,
 	    wrange: 0..=0,
-	    active: Pos4Set::new(),
 	    use_w: self.use_w,
+	    active: Pos4Set::new(),
 	};
-
-	// First, consider possible state changes in the cells that are
-	// currently active.
-	for currently_active in self.active.iter() {
-	    match neighbour_count.get(&currently_active) {
-		Some(2) | Some(3) => {
-		    next.insert(*currently_active); // unchanged
-		}
-		_ => (),	// becomes inactive
-	    }
+	for p in itertools::chain(
+	    // First, consider possible state changes in the cells
+	    // that are currently active.
+	    self.active.iter()
+		.filter(|currently_active|
+			match neighbour_count.get(&currently_active) {
+			    Some(2) | Some(3) => true, // remains active
+			    _ => false,	// becomes inactive
+			}),
+	    // Second, consider possible state changes in the cells
+	    // that are not currently active.
+	    neighbour_count.iter()
+	    // The filter acceps only cells that are inactive but will become
+	    // active.
+		.filter(|(pos, num_neighbours)|
+			// The check on self.active.contains()
+			// here is probably unnecessary, since a
+			// duplicate insert into next would be
+			// harmless and cells with 3 active
+			// neighbours already got inserted into
+			// next in the loop above.
+			(**num_neighbours == 3) && (!self.active.contains(pos)))
+		.map(|(pos, _)| pos)) {
+	    result.insert(*p)	// updates ranges also.
 	}
-	// Consier possible state changes in the cells that are not
-	// currently active.
-	for (pos, neighbours) in neighbour_count.iter() {
-	    // The check on self.active.contains() here is probably
-	    // unnecessary, since a duplicate insert into next would be
-	    // harmless and cells with 3 active neighbours already got
-	    // inserted into next in the loop above.
-	    if neighbours == &3 && (!self.active.contains(pos)) {
-		next.insert(*pos); // becomes active
-	    }
-	}
-	next
+	result
     }
 }
 
