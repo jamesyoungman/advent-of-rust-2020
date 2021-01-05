@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::RangeInclusive;
@@ -154,10 +152,9 @@ impl Lattice {
 	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
 	for neighbour in self.active.iter()
 	    .flat_map(|pos| self.neighbours_of(&pos)) {
-		match neighbour_count.get(&neighbour) {
-		    None => neighbour_count.insert(neighbour, 1),
-		    Some(n) => neighbour_count.insert(neighbour, n+1),
-		};
+		neighbour_count.entry(neighbour)
+		    .and_modify(|e| *e += 1)
+		    .or_insert(1);
 	    }
 	neighbour_count
     }
