@@ -68,7 +68,7 @@ impl Lattice {
 
     fn slice_as_str(&self, w: Ordinate, z: Ordinate) -> String {
 	let mut output = String::with_capacity(
-	    range_size(&self.xrange) * range_size(&self.yrange));
+	    (range_size(&self.xrange) + 1) * range_size(&self.yrange));
 	for y in self.yrange.clone() {
 	    for x in self.xrange.clone() {
 		let pos = Pos4{x, y, z, w};
@@ -89,12 +89,8 @@ impl Lattice {
 	    match ch {
 		'#' => {
 		    cells.insert(Pos4{x, y, z: 0, w: 0});
-		    if &x > xrange.end() {
-			xrange = 0..=x;
-		    }
-		    if &y > yrange.end() {
-			yrange = 0..=y;
-		    }
+		    xrange = update_range(&x, xrange.clone());
+		    yrange = update_range(&y, yrange.clone());
 		    x += 1;
 		}
 		'.' => {
@@ -131,7 +127,7 @@ impl Lattice {
 		for y in (pos.y-1)..=(pos.y+1) {
 		    for x in (pos.x-1)..=(pos.x+1) {
 			let neighbour = Pos4{w, z, y, x};
-			if neighbour != *pos {
+			if neighbour != *pos { // can't be my own neighbour
 			    result.push(neighbour);
 			}
 		    }
@@ -155,23 +151,11 @@ impl Lattice {
     fn iterate(&self) -> Lattice {
 	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
 	for pos in self.active.iter() {
-		if !self.use_w {
-		    assert!(pos.w == 0)
-		}
-	    let neighbours = self.neighbours_of(&pos);
-	    for neighbour in neighbours {
-		if !self.use_w {
-		    assert!(neighbour.w == 0)
-		}
-		//println!("{:?} is an active neighbour of {:?}", pos, neighbour);
+	    for neighbour in self.neighbours_of(&pos) {
 		neighbour_count.entry(neighbour).and_modify(|e| *e += 1).or_insert(1);
 	    }
 	}
-	//for (pos, n) in neighbour_count.iter() {
-	//    println!("{:?} has {} active neighbours", pos, n);
-	//}
-	//println!("iterate: we evaluated neighbour counts for {} cells",
-	//	 neighbour_count.len());
+
 	let mut next = Lattice {
 	    xrange: 0..=0,
 	    yrange: 0..=0,
@@ -181,10 +165,9 @@ impl Lattice {
 	    use_w: self.use_w,
 	};
 
+	// First, consider possible state changes in the cells that are
+	// currently active.
 	for currently_active in self.active.iter() {
-	    if !self.use_w {
-		assert!(currently_active.w == 0)
-	    }
 	    match neighbour_count.get(&currently_active) {
 		Some(2) | Some(3) => {
 		    next.insert(*currently_active); // unchanged
@@ -192,17 +175,15 @@ impl Lattice {
 		_ => (),	// becomes inactive
 	    }
 	}
+	// Consier possible state changes in the cells that are not
+	// currently active.
 	for (pos, neighbours) in neighbour_count.iter() {
-	    let active = self.active.contains(pos);
-	    match (active, neighbours) {
-		(true, _) => (), // already considered above
-		(false, 3) => {
-		    if !self.use_w {
-			assert!(pos.w == 0)
-		    }
-		    next.insert(*pos); // becomes active
-		}
-		(false, _) => (), // remains inactive
+	    // The check on self.active.contains() here is probably
+	    // unnecessary, since a duplicate insert into next would be
+	    // harmless and cells with 3 active neighbours already got
+	    // inserted into next in the loop above.
+	    if neighbours == &3 && (!self.active.contains(pos)) {
+		next.insert(*pos); // becomes active
 	    }
 	}
 	next
@@ -231,22 +212,15 @@ fn read_input() -> Result<Lattice, String> {
     }
 }
 
-fn cycles(initial: &Lattice, cycles: usize) -> Lattice {
-    let mut current: Lattice = initial.iterate();
-    for iteration in 1..cycles {
-	println!("After {} cycle:\n{}", iteration, current);
-	current = current.iterate();
-    }
-    println!("Finally at {} cycles:\n{}", cycles, current);
-    current
-}
-
 fn part_n(part_num: i32, initial: &Lattice, num_cycles: usize, use_w: bool) {
     let mut begin: Lattice = initial.clone();
     begin.use_w = use_w;
-    let updated = cycles(&begin, num_cycles);
+    let mut current: Lattice = begin.iterate();
+    for _iteration in 1..num_cycles {
+	current = current.iterate();
+    }
     println!("Part {}: after {} iterations, population is {}",
-	     part_num, num_cycles, updated.popcount());
+	     part_num, num_cycles, current.popcount());
 }
 
 
@@ -254,7 +228,7 @@ fn run() -> Result<(), String> {
     let initial = read_input()?;
     println!("Initial state is:\n{}", initial);
     part_n(1, &initial, 6, false);
-    //part_n(2, &initial, 6, true);
+    part_n(2, &initial, 6, true);
     Ok(())
 }
 
