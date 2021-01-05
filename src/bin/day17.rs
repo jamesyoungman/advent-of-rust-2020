@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::RangeInclusive;
@@ -5,8 +7,8 @@ use std::io::{self, Read};
 use std::cmp::{min, max};
 use std::fmt;
 
-type Ordinate = i32;
-type OrdinateRange = RangeInclusive<i32>;
+type Ordinate = i64;
+type OrdinateRange = RangeInclusive<i64>;
 
 #[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
 struct Pos4
@@ -42,7 +44,7 @@ fn range_size(r: &OrdinateRange) -> usize {
     if r.end() < r.start() {
 	0
     } else {
-	let result: i32 = r.end() - r.start() + 1;
+	let result: Ordinate = r.end() - r.start() + 1;
 	assert!(result > 0);
 	result as usize
     }
@@ -148,15 +150,19 @@ impl Lattice {
 	self.wrange = update_range(&pos.w, self.wrange.clone());
     }
 
-    fn iterate(&self) -> Lattice {
+    fn count_neighbours(&self) -> Pos4Counter {
 	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
 	for neighbour in self.active.iter()
 	    .flat_map(|pos| self.neighbours_of(&pos)) {
-		neighbour_count.entry(neighbour)
-		    .and_modify(|e| *e += 1)
-		    .or_insert(1);
+		match neighbour_count.get(&neighbour) {
+		    None => neighbour_count.insert(neighbour, 1),
+		    Some(n) => neighbour_count.insert(neighbour, n+1),
+		};
 	    }
+	neighbour_count
+    }
 
+    fn decide_actives(&self, neighbour_count: &Pos4Counter) -> Lattice {
 	let mut result = Lattice{
 	    xrange: 0..=0,
 	    yrange: 0..=0,
@@ -189,6 +195,11 @@ impl Lattice {
 	    result.insert(*p)	// updates ranges also.
 	}
 	result
+    }
+
+    fn iterate(&self) -> Lattice {
+	let neighbour_count = self.count_neighbours();
+	self.decide_actives(&neighbour_count)
     }
 }
 
