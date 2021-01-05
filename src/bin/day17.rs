@@ -57,8 +57,12 @@ impl Lattice {
 	    match ch {
 		'#' => {
 		    cells.insert(Pos4{x, y, z: 0, w: 0});
-		    xrange = 0..=x;
-		    yrange = 0..=y;
+		    if &x > xrange.end() {
+			xrange = 0..=x;
+		    }
+		    if &y > yrange.end() {
+			yrange = 0..=y;
+		    }
 		    x += 1;
 		}
 		'.' => {
