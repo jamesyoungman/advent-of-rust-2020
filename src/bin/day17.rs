@@ -171,22 +171,20 @@ impl Lattice {
 	    self.active.iter()
 		.filter(|currently_active|
 			match neighbour_count.get(&currently_active) {
-			    Some(2) | Some(3) => true, // remains active
+			    // Active cells with 3 active neighbours
+			    // are inserted as a result of the pipeline
+			    // acting on neighbour_count, below, and so
+			    // we omit them here to avoid duplicate work.
+			    Some(2) => true, // remains active
 			    _ => false,	// becomes inactive
 			}),
 	    // Second, consider possible state changes in the cells
 	    // that are not currently active.
 	    neighbour_count.iter()
-	    // The filter acceps only cells that are inactive but will become
-	    // active.
-		.filter(|(pos, num_neighbours)|
-			// The check on self.active.contains()
-			// here is probably unnecessary, since a
-			// duplicate insert into next would be
-			// harmless and cells with 3 active
-			// neighbours already got inserted into
-			// next in the loop above.
-			(**num_neighbours == 3) && (!self.active.contains(pos)))
+	    // The filter acceps cells that are inactive but will
+	    // become active, and also active cells with 3 neighbours
+	    // (which should stay active).
+		.filter(|(_, num_neighbours)| **num_neighbours == 3)
 		.map(|(pos, _)| pos)) {
 	    result.insert(*p)	// updates ranges also.
 	}
