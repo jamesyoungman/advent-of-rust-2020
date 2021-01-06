@@ -139,33 +139,6 @@ impl Parser {
 	self.prec(b)
     }
 
-    fn is_binary(b: &Option<Token>) -> bool {
-	match b {
-	    Some(Token::Operator('+')) | Some(Token::Operator('*')) => true,
-	    _ => false,
-	}
-    }
-
-    fn p(&self, lex: &mut Lexer) -> Result<Expr, String> {
-	match lex.next() {
-	    Some(Token::LeftParen) => {
-		lex.consume();
-		let result = self.e(0, lex);
-		if result.is_ok() {
-		    self.expect(lex, &Token::RightParen)?;
-		}
-		result
-	    }
-	    Some(Token::Number(n)) => {
-		lex.consume();
-		Ok(Expr::Constant(n))
-	    }
-	    Some(Token::Operator(ch)) => Err(format!("[E0600] unexpected operator '{}'", ch)),
-	    Some(Token::RightParen) => Err("[E0700] unexpected ')'".to_string()),
-	    None => Err("E0800] unexpected end-of-input".to_string()),
-	}
-    }
-
     fn prec_is_between(&self, low: i64, t: &Option<Token>, high: i64) -> bool {
 	match self.prec(t) {
 	    Ok(p) => {
@@ -181,31 +154,51 @@ impl Parser {
 	}
     }
 
-    fn e(&self, precedence: i64, lex: &mut Lexer) -> Result<Expr, String> {
+    fn parse_operand(&self, lex: &mut Lexer) -> Result<Expr, String> {
+	match lex.next() {
+	    Some(Token::LeftParen) => {
+		lex.consume();
+		let result = self.parse_expression(0, lex);
+		if result.is_ok() {
+		    self.expect(lex, &Token::RightParen)?;
+		}
+		result
+	    }
+	    Some(Token::Number(n)) => {
+		lex.consume();
+		Ok(Expr::Constant(n))
+	    }
+	    Some(Token::Operator(ch)) => Err(format!("[E0600] unexpected operator '{}'", ch)),
+	    Some(Token::RightParen) => Err("[E0700] unexpected ')'".to_string()),
+	    None => Err("E0800] unexpected end-of-input".to_string()),
+	}
+    }
+
+    fn parse_expression(&self, precedence: i64, lex: &mut Lexer) -> Result<Expr, String> {
 	assert!(precedence >= 0);
-	let mut t: Expr = self.p(lex)?;
+	let mut lhs: Expr = self.parse_operand(lex)?;
 	let mut r: i64 = 1000;
 	while self.prec_is_between(precedence, &lex.next(), r) {
 	    let b = lex.next();
 	    lex.consume();
-	    if Self::is_binary(&b) {
-		let prec = self.right_prec(&b)?;
-		let y = self.e(prec, lex)?;
-		t = match b {
-		    Some(Token::Operator(ch)) => Expr::Op(Box::new(t), ch, Box::new(y)),
-		    _ => { return Err("[E0900] expected operator".to_string()); }
-		};
-	    } else {
-		return Err(format!("[E1000] unexpected non-binary operator '{:?}'", b));
-	    }
+	    lhs = match b {
+		Some(Token::Operator(ch)) if (ch == '+' || ch == '*') => {
+		    let prec = self.right_prec(&b)?;
+		    let rhs = self.parse_expression(prec, lex)?;
+		    Expr::Op(Box::new(lhs), ch, Box::new(rhs))
+		}
+		_ => {
+		    return Err(format!("[E1050] unexpected token '{:?}'", b));
+		}
+	    };
 	    r = self.next_prec(&b)?;
 	}
-	Ok(t)
+	Ok(lhs)
     }
 
     fn parse(&self, expr_str: &str) -> Result<Expr, String> {
 	let mut lex = Lexer::new(expr_str);
-	let tree = self.e(0, &mut lex)?;
+	let tree = self.parse_expression(0, &mut lex)?;
 	// check we parsed the whole expression
 	match lex.next() {
 	    None => Ok(tree),
