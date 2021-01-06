@@ -177,21 +177,21 @@ impl Parser {
     fn parse_expression(&self, precedence: i64, lex: &mut Lexer) -> Result<Expr, String> {
 	assert!(precedence >= 0);
 	let mut lhs: Expr = self.parse_operand(lex)?;
-	let mut r: i64 = 1000;
-	while self.prec_is_between(precedence, &lex.next(), r) {
-	    let b = lex.next();
+	let mut stop_at_prec: i64 = 1000;
+	while self.prec_is_between(precedence, &lex.next(), stop_at_prec) {
+	    let operator = lex.next();
 	    lex.consume();
-	    lhs = match b {
+	    lhs = match operator {
 		Some(Token::Operator(ch)) if (ch == '+' || ch == '*') => {
-		    let prec = self.right_prec(&b)?;
+		    let prec = self.right_prec(&operator)?;
 		    let rhs = self.parse_expression(prec, lex)?;
 		    Expr::Op(Box::new(lhs), ch, Box::new(rhs))
 		}
 		_ => {
-		    return Err(format!("[E1050] unexpected token '{:?}'", b));
+		    return Err(format!("[E1050] unexpected operator '{:?}'", operator));
 		}
 	    };
-	    r = self.next_prec(&b)?;
+	    stop_at_prec = self.next_prec(&operator)?;
 	}
 	Ok(lhs)
     }
