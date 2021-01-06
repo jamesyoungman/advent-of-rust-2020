@@ -105,7 +105,11 @@ struct Parser {
     rules: Rules,
 }
 
-
+// A recursive descent parser for arithmetic expressions which uses
+// configurable precedence values to avoid having separate
+// implementations for parts 1 and 2.
+//
+// Based on http://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
 impl Parser {
     fn expect(&self, lex: &mut Lexer, expected: &Token) -> Result<(), String> {
 	match (expected, lex.next()) {
