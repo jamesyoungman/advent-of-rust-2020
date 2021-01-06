@@ -111,16 +111,6 @@ struct Parser {
 //
 // Based on http://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
 impl Parser {
-    fn expect(&self, lex: &mut Lexer, expected: &Token) -> Result<(), String> {
-	match (expected, lex.next()) {
-	    (_, None) => Err(format!("missing {:?}", expected)),
-	    // Number values do not have to match
-	    (Token::Number(_), Some(Token::Number(_))) => Ok(()),
-	    (ex, Some(g)) if (ex == &g) => Ok(()),
-	    (_, Some(got)) => Err(format!("[E0100] unexpected {:?}", got)),
-	}.and_then(|_| Ok(lex.consume()))
-    }
-
     fn prec(&self, b: &Option<Token>) -> Result<i64, String> {
 	match b {
 	    None => Ok(-1),
@@ -154,23 +144,28 @@ impl Parser {
 	}
     }
 
+    fn parse_paren_expr(&self, lex: &mut Lexer) -> Result<Expr, String> {
+	lex.consume();	// consume the (
+	self.parse_expression(0, lex) // and the contents
+	    .and_then(|r|  {
+		match lex.next() {
+		    Some(Token::RightParen) => { // and finally the closing )
+			lex.consume();
+			Ok(r)
+		    }
+		    _ => Err("expected a closing ')'".to_string())
+		}
+	    })
+    }
+
     fn parse_operand(&self, lex: &mut Lexer) -> Result<Expr, String> {
 	match lex.next() {
-	    Some(Token::LeftParen) => {
-		lex.consume();
-		let result = self.parse_expression(0, lex);
-		if result.is_ok() {
-		    self.expect(lex, &Token::RightParen)?;
-		}
-		result
-	    }
+	    Some(Token::LeftParen) => self.parse_paren_expr(lex),
 	    Some(Token::Number(n)) => {
 		lex.consume();
 		Ok(Expr::Constant(n))
 	    }
-	    Some(Token::Operator(ch)) => Err(format!("[E0600] unexpected operator '{}'", ch)),
-	    Some(Token::RightParen) => Err("[E0700] unexpected ')'".to_string()),
-	    None => Err("E0800] unexpected end-of-input".to_string()),
+	    _ => Err("[E0600] expected a number or an open parenthesis".to_string())
 	}
     }
 
