@@ -183,7 +183,7 @@ impl Parser {
 		    Expr::Op(Box::new(lhs), ch, Box::new(rhs))
 		}
 		_ => {
-		    return Err(format!("[E1050] unexpected operator '{:?}'", operator));
+		    return Err(format!("[E1050] expected '+' or '*', got '{:?}'", operator));
 		}
 	    };
 	    stop_at_prec = self.next_prec(&operator)?;
