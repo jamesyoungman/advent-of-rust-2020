@@ -1,11 +1,14 @@
+extern crate itertools;
 extern crate lazy_static;
 extern crate regex;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::cmp;
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::io;
 use std::fmt;
+use itertools::Itertools;
 
 lazy_static! {
     static ref RULE_RE: Regex = Regex::new(r"^(\d+): (.*)$").expect("RULE_RE");
@@ -17,9 +20,64 @@ type RuleId = i32;
 
 #[derive(PartialEq, Debug)]
 enum Rule {
-    Sequence(Vec<RuleId>),
-    Alternative(Vec<RuleId>, Vec<RuleId>),
-    Literal(char)
+    Sequence(Vec<RuleId>),	// e.g. [28: 16 1]
+    Alternative(Vec<RuleId>, Vec<RuleId>), // e.g. [26: 14 22 | 1 20]
+    Literal(char),			   // e.g. [14: "b"]
+    CannedRegex(String),	// used for part 2.
+}
+
+fn make_group(pattern: &str) -> String {
+    // By using non-capturing groups we save memory and compute when
+    // performing pattern matching (and, probably, memory when
+    // compiling the regex).
+    format!("(:?{})", pattern)
+}
+
+fn repeat(s: &str, n: usize) -> String {
+    let mut result = String::with_capacity(n * s.len());
+    for _ in 0..n {
+	result.push_str(s);
+    }
+    result
+}
+
+fn balanced(left: &str, right: &str, maxlen: usize) -> String {
+    let mut tmp: Vec<String> = Vec::new();
+    for reps in 1..=maxlen {
+	tmp.push(make_group(format!("{}{}",
+				    repeat(left, reps),
+				    repeat(right, reps)).as_str()));
+    }
+    make_group(&tmp.iter().join("|"))
+}
+
+fn translate_rule_sequence(items: &[RuleId], rules: &HashMap<RuleId, Rule>) -> Result<String, String> {
+    items.iter().map(|i| translate_to_regex_pattern(i, rules)).collect()
+}
+
+fn translate_alternative(left_items: &Vec<RuleId>, right_items: &Vec<RuleId>,
+			 rules: &HashMap<RuleId, Rule>) -> Result<String, String>  {
+    let lpat = translate_rule_sequence(left_items, rules)?;
+    let rpat = translate_rule_sequence(right_items, rules)?;
+    Ok(
+	if lpat.len() != 1 || rpat.len() != 1 {
+	    make_group(&format!("{}|{}", lpat , rpat))
+	} else {
+	    format!("[{}{}]", lpat, rpat)
+	}
+    )
+}
+
+fn translate_to_regex_pattern(start_rule: &RuleId,
+			      rules: &HashMap<RuleId, Rule>) -> Result<String, String> {
+    match rules.get(start_rule) {
+	None => Err(format!("missing definition for rule {}", start_rule)),
+	Some(Rule::Sequence(items)) => translate_rule_sequence(items, rules),
+	Some(Rule::Alternative(left_items, right_items)) =>
+	    translate_alternative(left_items, right_items, rules),
+	Some(Rule::CannedRegex(pattern)) => Ok(pattern.to_string()),
+	Some(Rule::Literal(ch)) => Ok(ch.to_string()),
+    }
 }
 
 fn seq_items(s: &str) -> Result<Vec<RuleId>, String> {
@@ -49,6 +107,7 @@ impl fmt::Display for Rule {
 	    Rule::Alternative(left, right) => write!(f, "{} | {}",
 						     seq_fmt(left), seq_fmt(right)),
 	    Rule::Literal(ch) => write!(f, "\"{}\"", ch),
+	    Rule::CannedRegex(pattern) => write!(f, "[canned] {}", pattern),
 	}
     }
 }
@@ -131,7 +190,28 @@ fn read_lines() -> Result<Vec<String>, String> {
     Ok(input_lines)
 }
 
+fn count_matches(rx: &Regex, messages: &Vec<String>, show_matches: &bool) -> usize {
+    let printer = |m| {
+	if *show_matches {
+	    println!("{}", m);
+	}
+	m
+    };
+    messages.iter()
+	.filter(|m| rx.is_match(m))
+	.map(printer)
+	.count()
+}
+
+fn compile_regex(pattern: &str) -> Regex {
+    let anchored = format!("^{}$", make_group(pattern));
+    Regex::new(&anchored).expect("failed to compile regex")
+}
+
+
 fn run() -> Result<(), String> {
+    let show_matches = false;
+    let show_patterns = false;
     let lines = read_lines()?;
     let mut rules: HashMap<RuleId, Rule> = HashMap::new();
     let mut messages: Vec<String> = Vec::new();
@@ -148,12 +228,48 @@ fn run() -> Result<(), String> {
 	    }
 	}
     }
-    for (id, r) in rules {
-	println!("rule {}: {}", id, r);
+
+    let pat1 = translate_to_regex_pattern(&0, &rules)?;
+    if show_patterns {
+	println!("Part 1: regex for 0 is {}", pat1);
     }
-    for msg in messages {
-	println!("check: {}", msg);
+    let rx1 = compile_regex(&pat1);
+
+    let maxlen: usize = match messages.iter()
+	.map(|m| m.len())
+	.max() {
+	    None => {
+	    println!("No messages, nothing to do");
+	    return Ok(())
+	}
+	Some(n) => n,
+    };
+
+    println!("Part 1: {} matches", count_matches(&rx1, &messages, &show_matches));
+
+    // Customisations for part 2.
+    let rule31_pattern = translate_to_regex_pattern(&31, &rules)?;
+    let rule42_pattern = translate_to_regex_pattern(&42, &rules)?;
+    rules.insert(8, Rule::CannedRegex(format!("(({})+)", rule42_pattern)));
+    // Rule 11 should match XY, XXYY, XXXYYY, ... without limit, which
+    // cannot be represented in a regex, so we have to choose an upper
+    // limit.  The obvious upper limit is the maximum message length,
+    // but if we choose that, the Rust Regex implementation will
+    // refuse to compile the pattern.  At lower levels (e.g. 10), the
+    // implementation will try but run out of memory or take a long
+    // time.  Hence we determined experimentally that a maximum repeat
+    // count of 5 gets us the right answer.
+    let repeats = cmp::min(maxlen, 5);
+    rules.insert(11, Rule::CannedRegex(balanced(&rule42_pattern, &rule31_pattern,
+						repeats)));
+
+    let pat2 = translate_to_regex_pattern(&0, &rules)?;
+    if show_patterns {
+	println!("Part 2: regex for 0 is {}", pat2);
     }
+    let rx2 = compile_regex(&pat2);
+    println!("Part 2: {} matches", count_matches(&rx2, &messages, &show_matches));
+
     Ok(())
 }
 
