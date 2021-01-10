@@ -288,13 +288,6 @@ struct EdgeKey {
 }
 
 impl EdgeKey {
-    fn from_edge(d: &Direction, edge: &ArrayView1<u8>) -> EdgeKey {
-	EdgeKey{
-	    direction: *d,
-	    pattern: EdgePattern::from_edge(edge),
-	}
-    }
-
     fn from_matrix(d: &Direction, m: &ArrayView2<u8>) -> EdgeKey {
 	EdgeKey{
 	    direction: *d,
@@ -627,7 +620,6 @@ fn place(tile_id: &TileId,
 	 how: &Manipulation,
 	 pos: &Position,
 	 tiles: &HashMap<TileId, Tile>,
-	 ix: &HashMap<EdgePattern, Vec<TileIndexEntry>>,
 	 solution: &mut TileLocationSolution,
 	 todo: &mut HashSet<TileId>) {
     let tile: &Tile = match tiles.get(&tile_id) {
@@ -743,7 +735,6 @@ fn solve1x(tiles: &HashMap<TileId, Tile>,
 	log::debug!("solve1x: tile {} is at {} ({})", t, pos, manip);
     }
 
-    let mut progress = false;
     for exposed_edge in solution.exposed_edges.iter() {
 	let pos = get_neighbour(&exposed_edge.pos, exposed_edge.direction);
 	let candidates: HashMap<TileId, Vec<Manipulation>> =
@@ -761,7 +752,7 @@ fn solve1x(tiles: &HashMap<TileId, Tile>,
 		} else {
 		    // We have just one possible tile and just one possible orientation.
 		    for manip in manipulations {
-			place(tile_id, manip, &pos, tiles, ix, solution, todo);
+			place(tile_id, manip, &pos, tiles, solution, todo);
 			return;
 		    }
 		}
@@ -783,7 +774,7 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
 	}
     };
     let mut solution = TileLocationSolution::new();
-    place(initial, initial_manip, &Position{x: 0, y: 0}, tiles, ix,
+    place(initial, initial_manip, &Position{x: 0, y: 0}, tiles,
 	  &mut solution, &mut todo);
     while !todo.is_empty() {
 	log::debug!("solve1: {}/{} tiles left to place", todo.len(), tiles.len());
@@ -844,10 +835,10 @@ fn solution_as_string(solution: &TileLocationSolution) -> String {
 		 format!("{}", solution.tile_to_position.keys().max().unwrap()).len());
     let mut result = String::new();
     let (minx, maxx, miny, maxy) = extrema(solution);
-    for (row, y) in (miny..=maxy).enumerate() {
+    for y in miny..=maxy {
 	let mut id_row = String::new();
 	let mut manip_row = String::new();
-	for (col, x) in (minx..=maxx).enumerate() {
+	for x in minx..=maxx {
 	    let pos = Position{x, y};
 	    let (t, m) = match solution.position_to_tile.get(&pos) {
 		Some(tid) => {
