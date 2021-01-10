@@ -432,7 +432,7 @@ impl Tile {
 		Err(e) => { return Err(format!("failed to parse '{}' as an integer: {}",
 					       &caps[1], e)); }
 	    }
-	    None => { return Err("tile is missing a title".to_string()); }
+	    None => { return Err(format!("tile is missing a title:\n{}", s)); }
 	};
 	println!("tile id is {}", id);
 	let width = lines[1].len();
@@ -561,7 +561,7 @@ Tile 4:
 }
 
 fn read_tiles(s: &str) -> HashMap<TileId, Tile> {
-    let r: Result<HashMap<TileId, Tile>, String> = s.split("\n\n")
+    let r: Result<HashMap<TileId, Tile>, String> = s.trim().split("\n\n")
 	.map(|s| s.trim() )
 	.map(|s| {
 	    match Tile::from_string(s) {
@@ -647,16 +647,16 @@ fn place(tile_id: &TileId,
 fn edge_match(candidate: &ArrayView2<u8>,
 	      neighbour_direction: &Direction,
 	      neighbour: &ArrayView2<u8>) -> bool {
-    println!("edge_match: candidate=\n{}", candidate);
-    println!("edge_match: neighbour=\n{}", neighbour);
     let candidate_edge_key = EdgeKey::from_matrix(neighbour_direction, &candidate);
     let neighbour_edge_key = EdgeKey::from_matrix(
 	&opposite_direction(&neighbour_direction),
 	&neighbour);
     let opposing = neighbour_edge_key.opposing();
-    print!("edge_match: {} side: checking {} against {}: ",
-	   neighbour_direction, opposing, candidate_edge_key);
-     opposing == candidate_edge_key
+    let result = opposing == candidate_edge_key;
+    let desc = if result { "match" } else { "no match" };
+    println!("edge_match: {} side: checking {} against {}: {}",
+	     neighbour_direction, opposing, candidate_edge_key, desc);
+    result
 }
 
 fn candidate_fits_neighbours(
@@ -792,7 +792,7 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
 	    panic!("solve1: no progress was made in call to solve1x.");
 	}
     }
-    println!("solve1: all tiles are in place.");
+    println!("solve1: all {} tiles are in place.", tiles.len());
     solution
 }
 
