@@ -6,6 +6,7 @@ extern crate regex;
 
 use ndarray::prelude::*;
 use ndarray::s;
+use ndarray::Zip;
 use regex::Regex;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -271,6 +272,11 @@ impl Tile {
 
     fn manipulated(&self, how: &Manipulation) -> Array2<u8> {
 	how.on(&self.d)
+    }
+
+    fn interior(&self, how: &Manipulation) -> Array2<u8> {
+	self.manipulated(how).slice(s![1..self.d.nrows()-1,
+				       1..self.d.ncols()-1]).into_owned()
     }
 }
 
@@ -548,7 +554,8 @@ Tile 4:
 
     let ix1 = make_tile_index(&tiles1);
     log::debug!("self_test: tile index is: {:?}", ix1);
-    let sol1 = solve1(&tiles1, &ix1, &Manipulation::noop());
+    let initial_manip = &Manipulation::noop();
+    let sol1 = solve1(&tiles1, &ix1, initial_manip);
     log::debug!("self_test: solution is {:?}", sol1);
 
 
@@ -773,6 +780,8 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
 	    return TileLocationSolution::new();
 	}
     };
+    log::debug!("Placing intitial tile {} at (0,0) with manipulation {}",
+		initial, initial_manip);
     let mut solution = TileLocationSolution::new();
     place(initial, initial_manip, &Position{x: 0, y: 0}, tiles,
 	  &mut solution, &mut todo);
@@ -858,12 +867,144 @@ fn solution_as_string(solution: &TileLocationSolution) -> String {
 }
 
 
-fn part1(tiles: &HashMap<TileId, Tile>) -> Result<(), String> {
+fn part1(tiles: &HashMap<TileId, Tile>) -> Result<TileLocationSolution, String> {
     let ix = make_tile_index(tiles);
     log::debug!("part1: tile index is: {:?}", ix);
-    let sol = solve1(tiles, &ix, &Manipulation::noop());
+    // For convenience in debugging we choose an initial manipulation
+    // that makes the result come out lookikng like the sample in the
+    // question.
+    let initial_manip = &Manipulation{
+	rot: Rotation::Zero,
+	flip: true
+    };
+    let sol = solve1(tiles, &ix, &initial_manip);
     println!("Part 1: Solution is:\n{}", solution_as_string(&sol));
     println!("Part 1: corner product is {}", corner_product(&sol));
+    Ok(sol)
+}
+
+
+fn interior_tile_at(pos: &Position,
+		    tiles: &HashMap<TileId, Tile>,
+		    solution: &TileLocationSolution) -> Array2<u8> {
+    let tile_id = solution.position_to_tile.get(&pos).expect("missing tile");
+    let (_, manip) = solution.tile_to_position.get(tile_id).expect("inconsistent solution");
+    tiles.get(tile_id).expect("unknown tile").interior(manip)
+}
+
+fn assemble_big_bitmap(tiles: &HashMap<TileId, Tile>,
+		       solution: &TileLocationSolution) -> Array2<u8> {
+    let (minx, maxx, miny, maxy) = extrema(solution);
+    let (tile_height, tile_width): (i32, i32) = {
+	let some_tile = tiles.values()
+	    .next().expect("input contains no tiles")
+	    .interior(&Manipulation::noop());
+	(some_tile.nrows() as i32, some_tile.ncols() as i32)
+    };
+    let shape = ((tile_height * (maxy - miny + 1)) as usize,
+		 (tile_width * (maxx - minx + 1)) as usize);
+    log::debug!("shape of interior tiles is {:?}", (tile_height, tile_width));
+    log::debug!("shape of assembled tile is {:?}", shape);
+    // We use 2 as a marker value to determine whether we have
+    // correctly set all the elements in the output array from the
+    // data in the solution.
+    let mut result: Array2<u8> = Array::from_elem(shape, 2);
+    for (i, y) in (miny..=maxy).rev().enumerate() {
+	let ytop: i32 = i as i32 * tile_height;
+	for (j, x) in (minx..=maxx).enumerate() {
+	    let xleft = j as i32 * tile_width;
+	    let b = interior_tile_at(&Position{x,y}, tiles, solution);
+	    log::debug!("shape of interior tile for assignment is {:?}", b.shape());
+	    result.slice_mut(s![ytop..ytop+tile_height,
+				xleft..xleft+tile_width]).assign(&b);
+	}
+    }
+    match result.iter().max() {
+	None => panic!("output is empty"),
+	Some(0)|Some(1) => result,
+	Some(2) => panic!("some parts of the output array have not been update with the solution"),
+	_ => panic!("some parts of the output array have not been initialised"),
+    }
+}
+
+fn render_bitmap(b: &Array2<u8>) -> String {
+    let (height, width) = (b.shape()[0], b.shape()[1]);
+    let mut result = String::with_capacity(b.len() + height);
+    for (i, elem) in b.iter().enumerate() {
+	result.push(match elem {
+	    0 => '.',
+	    1 => '#',
+	    _ => '?',
+	});
+	if (i+1) % 8 == 0 {
+	    result.push(' ');
+	}
+	if (i+1) % width  == 0 {
+	    result.push('\n');
+	    if (i+1) % (24*8) == 0 {
+		result.push('\n');
+	    }
+	}
+    }
+    result
+}
+
+fn nessie() -> Array2<u8> {
+    let beastie = arr1(
+	&[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,
+	  1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,1,
+	  0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0]);
+    beastie.into_shape((3, 20)).unwrap()
+}
+
+fn mask_match(win: &ArrayView2<u8>, mask: &ArrayView2<u8>) -> bool {
+    Zip::from(win).and(mask)
+    // We only care about the state of w where the mask is nonzero.
+	.all(|&w_elem, &m_elem| (m_elem == 0) || (w_elem != 0))
+}
+
+fn find_image_locations(haystack: &Array2<u8>, mask: &Array2<u8>) -> Vec<(i32, i32)> {
+    let haystack_width = haystack.shape()[1];
+    haystack.windows((mask.shape()[0], mask.shape()[1]))
+	.into_iter()
+	.enumerate()
+	.filter_map(|(i, w)| {
+	    if mask_match(&w.view(), &mask.view()) {
+		log::debug!("found sea monster at i={}", i);
+		let y = i / haystack_width;
+		let x = i % haystack_width;
+		Some((x as i32, y as i32))
+	    } else {
+		None
+	    }
+	})
+	.collect()
+}
+
+fn measure_roughness(bitmap: &Array2<u8>,
+		     locations: &Vec<(i32, i32)>,
+		     mask: &Array2<u8>) -> i64 {
+    panic!("measure_roughness is not implemented");
+}
+
+fn part2(tiles: &HashMap<TileId, Tile>,
+	 solution: &TileLocationSolution) -> Result<(), String> {
+    let big_bitmap = assemble_big_bitmap(tiles, solution);
+    println!("big bitmap is:\n{}", render_bitmap(&big_bitmap));
+    let nessie_mask = nessie();
+    for rot in vec![Rotation::Zero, Rotation::One, Rotation::Two, Rotation::Three] {
+	for flip in vec![false, true] {
+	    let manip = Manipulation{rot, flip};
+	    let tweaked = manip.on(&big_bitmap);
+	    let locations = find_image_locations(&tweaked, &nessie_mask);
+	    log::info!("Part 2: monster locations ({}): {:?}", manip, locations);
+	    if !locations.is_empty() {
+		println!("Part 2: roughness is {}",
+			 measure_roughness(&tweaked, &locations, &nessie_mask));
+	    }
+	}
+    }
+
     Ok(())
 }
 
@@ -876,7 +1017,8 @@ fn run() -> Result<(), String> {
 	Ok(_) => read_tiles(&buffer),
 	Err(e) => { return Err(format!("I/O error: {}", e)); }
     };
-    part1(&tiles)?;
+    let solution = part1(&tiles)?;
+    part2(&tiles, &solution)?;
     Ok(())
 }
 
