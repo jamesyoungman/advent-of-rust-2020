@@ -235,6 +235,46 @@ struct Tile {
     d: Array2<u8>,
 }
 
+impl Tile {
+    fn from_string(s: &str) -> Result<Tile, String> {
+	let lines: Vec<String> = s.split('\n').map(str::to_string).collect();
+	if lines.len() == 0 {
+	    return Err("Tiles must not be empty".to_string());
+	}
+	let id: TileId = match TILE_TITLE_RE.captures(&lines[0]) {
+	    Some(caps) => match caps[1].parse() {
+		Ok(n) => n,
+		Err(e) => { return Err(format!("failed to parse '{}' as an integer: {}",
+					       &caps[1], e)); }
+	    }
+	    None => { return Err(format!("tile is missing a title:\n{}", s)); }
+	};
+	log::debug!("tile id is {}", id);
+	let width = lines[1].len();
+	let height = lines.len() - 1;
+	if width != height {
+	    return Err(format!("Tiles should be square but this has {} rows, {} columns: {:?}",
+			       height, width, lines));
+	}
+	let tiledata = s[lines[0].len()+1..].chars().collect::<Vec<char>>();
+	let d = Array::from_shape_fn(
+	    (height, width), |(r, c)| decode_ascii_tile(&id, r, c, &width, &tiledata));
+	if d.iter().filter(|x| **x == 2).count() > 0 {
+	    log::debug!("bad tile data:\n{}", &s[width+1..]);
+	    return Err("tile data contained unexpected characters".to_string());
+	}
+	Ok(Tile{
+	    id,
+	    d,
+	})
+    }
+
+    fn manipulated(&self, how: &Manipulation) -> Array2<u8> {
+	how.on(&self.d)
+    }
+}
+
+
 #[derive(Debug,Clone)]
 struct TileIndexEntry {
     tile_id: TileId,
@@ -414,46 +454,6 @@ fn decode_ascii_tile(id: &TileId,
 	}
     }
 }
-
-impl Tile {
-    fn from_string(s: &str) -> Result<Tile, String> {
-	let lines: Vec<String> = s.split('\n').map(str::to_string).collect();
-	if lines.len() == 0 {
-	    return Err("Tiles must not be empty".to_string());
-	}
-	let id: TileId = match TILE_TITLE_RE.captures(&lines[0]) {
-	    Some(caps) => match caps[1].parse() {
-		Ok(n) => n,
-		Err(e) => { return Err(format!("failed to parse '{}' as an integer: {}",
-					       &caps[1], e)); }
-	    }
-	    None => { return Err(format!("tile is missing a title:\n{}", s)); }
-	};
-	log::debug!("tile id is {}", id);
-	let width = lines[1].len();
-	let height = lines.len() - 1;
-	if width != height {
-	    return Err(format!("Tiles should be square but this has {} rows, {} columns: {:?}",
-			       height, width, lines));
-	}
-	let tiledata = s[lines[0].len()+1..].chars().collect::<Vec<char>>();
-	let d = Array::from_shape_fn(
-	    (height, width), |(r, c)| decode_ascii_tile(&id, r, c, &width, &tiledata));
-	if d.iter().filter(|x| **x == 2).count() > 0 {
-	    log::debug!("bad tile data:\n{}", &s[width+1..]);
-	    return Err("tile data contained unexpected characters".to_string());
-	}
-	Ok(Tile{
-	    id,
-	    d,
-	})
-    }
-
-    fn manipulated(&self, how: &Manipulation) -> Array2<u8> {
-	how.on(&self.d)
-    }
-}
-
 
 
 fn self_test() -> Result<(), String> {
