@@ -9,6 +9,7 @@ use ndarray::s;
 use regex::Regex;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::cmp;
 use std::fmt;
 use std::io;
 use std::io::Read;
@@ -797,10 +798,41 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
     solution
 }
 
+fn min_and_max<T>(things: T) -> (i32, i32)
+where
+    T: IntoIterator<Item=i32>
+{
+    let initial: (i32, i32) = (0 as i32, 0 as i32);
+    things.into_iter().fold(
+	initial,
+	|acc, x| (cmp::min(acc.0, x), cmp::max(acc.1, x)))
+}
+
+fn corner_product(solution: &TileLocationSolution) -> i64 {
+    let (minx, maxx) = min_and_max(solution.position_to_tile.keys().map(|p| p.x));
+    let (miny, maxy) = min_and_max(solution.position_to_tile.keys().map(|p| p.y));
+    let mut product: i64 = 1;
+    for pos in &vec![Position{x: minx, y: miny}, Position{x: miny, y: maxy},
+		     Position{x: maxx, y: miny}, Position{x: maxx, y: maxy}] {
+	match solution.position_to_tile.get(&pos) {
+	    None => {
+		panic!(format!("solution is not rectangular; {} is not occupied", pos));
+	    }
+	    Some(tid) => {
+		log::debug!("corner_product: {} is a corner tile", tid);
+		product *= tid.val as i64;
+	    }
+	}
+    }
+    product
+}
+
+
 fn part1(tiles: &HashMap<TileId, Tile>) -> Result<(), String> {
     let ix = make_tile_index(tiles);
     log::debug!("part1: tile index is: {:?}", ix);
     let sol = solve1(tiles, &ix, &Manipulation::noop());
+    println!("Part 1: corner product is {}", corner_product(&sol));
     Ok(())
 }
 
