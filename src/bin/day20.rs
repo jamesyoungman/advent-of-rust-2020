@@ -808,23 +808,62 @@ where
 	|acc, x| (cmp::min(acc.0, x), cmp::max(acc.1, x)))
 }
 
-fn corner_product(solution: &TileLocationSolution) -> i64 {
+
+fn extrema(solution: &TileLocationSolution) -> (i32, i32, i32, i32) {
     let (minx, maxx) = min_and_max(solution.position_to_tile.keys().map(|p| p.x));
     let (miny, maxy) = min_and_max(solution.position_to_tile.keys().map(|p| p.y));
-    let mut product: i64 = 1;
-    for pos in &vec![Position{x: minx, y: miny}, Position{x: miny, y: maxy},
-		     Position{x: maxx, y: miny}, Position{x: maxx, y: maxy}] {
+    (minx, maxx, miny, maxy)
+}
+
+fn corners(solution: &TileLocationSolution) -> [Position; 4] {
+    let (minx, maxx, miny, maxy) = extrema(solution);
+    let result = [Position{x: minx, y: miny},
+		  Position{x: minx, y: maxy},
+		  Position{x: maxx, y: miny},
+		  Position{x: maxx, y: maxy}];
+    for pos in &result {
 	match solution.position_to_tile.get(&pos) {
 	    None => {
 		panic!(format!("solution is not rectangular; {} is not occupied", pos));
 	    }
-	    Some(tid) => {
-		log::debug!("corner_product: {} is a corner tile", tid);
-		product *= tid.val as i64;
-	    }
+	    Some(_) => (),
 	}
     }
-    product
+    result
+}
+
+fn corner_product(solution: &TileLocationSolution) -> i64 {
+    corners(solution).iter()
+	.map(|pos| solution.position_to_tile.get(pos).unwrap().val as i64)
+	.product()
+}
+
+fn solution_as_string(solution: &TileLocationSolution) -> String {
+    let column_width = 1 +
+	cmp::max(4, 		// width of manipulation representation
+		 format!("{}", solution.tile_to_position.keys().max().unwrap()).len());
+    let mut result = String::new();
+    let (minx, maxx, miny, maxy) = extrema(solution);
+    for (row, y) in (miny..=maxy).enumerate() {
+	let mut id_row = String::new();
+	let mut manip_row = String::new();
+	for (col, x) in (minx..=maxx).enumerate() {
+	    let pos = Position{x, y};
+	    let (t, m) = match solution.position_to_tile.get(&pos) {
+		Some(tid) => {
+		    let manip = solution.tile_to_position.get(tid).unwrap().1;
+		    (format!("{}", tid), format!("{}", manip))
+		}
+		None => {
+		    ("????".to_string(), "????".to_string())
+		}
+	    };
+	    id_row.push_str(&format!("{:width$}", t, width=column_width));
+	    manip_row.push_str(&format!("{:width$}", m, width=column_width));
+	}
+	result.push_str(&format!("{}\n{}\n\n", id_row, manip_row));
+    }
+    result
 }
 
 
@@ -832,6 +871,7 @@ fn part1(tiles: &HashMap<TileId, Tile>) -> Result<(), String> {
     let ix = make_tile_index(tiles);
     log::debug!("part1: tile index is: {:?}", ix);
     let sol = solve1(tiles, &ix, &Manipulation::noop());
+    println!("Part 1: Solution is:\n{}", solution_as_string(&sol));
     println!("Part 1: corner product is {}", corner_product(&sol));
     Ok(())
 }
