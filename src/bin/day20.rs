@@ -1,5 +1,6 @@
-#[macro_use]
-extern crate lazy_static;
+extern crate log;
+extern crate pretty_env_logger;
+#[macro_use] extern crate lazy_static;
 extern crate ndarray;
 extern crate regex;
 
@@ -413,7 +414,7 @@ fn decode_ascii_tile(id: &TileId,
 	'#' => 1,
 	'.' => 0,
 	_ => {
-	    println!("decode_ascii_tile: unexpected character {} at r={}, c={} in defintiion for tile {}",
+	    log::debug!("decode_ascii_tile: unexpected character {} at r={}, c={} in defintiion for tile {}",
 		     s[pos], r, c, id);
 	    2	//signal an error.
 	}
@@ -434,7 +435,7 @@ impl Tile {
 	    }
 	    None => { return Err(format!("tile is missing a title:\n{}", s)); }
 	};
-	println!("tile id is {}", id);
+	log::debug!("tile id is {}", id);
 	let width = lines[1].len();
 	let height = lines.len() - 1;
 	if width != height {
@@ -445,7 +446,7 @@ impl Tile {
 	let d = Array::from_shape_fn(
 	    (height, width), |(r, c)| decode_ascii_tile(&id, r, c, &width, &tiledata));
 	if d.iter().filter(|x| **x == 2).count() > 0 {
-	    println!("bad tile data:\n{}", &s[width+1..]);
+	    log::debug!("bad tile data:\n{}", &s[width+1..]);
 	    return Err("tile data contained unexpected characters".to_string());
 	}
 	Ok(Tile{
@@ -510,8 +511,8 @@ Tile 4:
 	rot: Rotation::One,
 	flip: true
     }.on(&t4);
-    println!("t4={}", t4);
-    println!("t4_r1fy={}", t4_r1fy);
+    log::debug!("t4={}", t4);
+    log::debug!("t4_r1fy={}", t4_r1fy);
     assert_eq!(t4_r1fy,
 	       arr2(&[[0,0,0,1,1],
 		      [0,0,0,0,1],
@@ -552,9 +553,9 @@ Tile 4:
 		       &tiles1.get(&TileId{val:3}).unwrap().d.view()));
 
     let ix1 = make_tile_index(&tiles1);
-    println!("self_test: tile index is: {:?}", ix1);
+    log::debug!("self_test: tile index is: {:?}", ix1);
     let sol1 = solve1(&tiles1, &ix1, &Manipulation::noop());
-    println!("self_test: solution is {:?}", sol1);
+    log::debug!("self_test: solution is {:?}", sol1);
 
 
     Ok(())
@@ -654,7 +655,7 @@ fn edge_match(candidate: &ArrayView2<u8>,
     let opposing = neighbour_edge_key.opposing();
     let result = opposing == candidate_edge_key;
     let desc = if result { "match" } else { "no match" };
-    println!("edge_match: {} side: checking {} against {}: {}",
+    log::debug!("edge_match: {} side: checking {} against {}: {}",
 	     neighbour_direction, opposing, candidate_edge_key, desc);
     result
 }
@@ -664,37 +665,37 @@ fn candidate_fits_neighbours(
     proposed_pos: &Position,
     tiles: &HashMap<TileId, Tile>,
     solution: &TileLocationSolution) -> bool {
-    println!("Trying to find out whether tile {} ({}) fits at {}",
+    log::debug!("Trying to find out whether tile {} ({}) fits at {}",
 	     cand.tile_id, cand.manipulation, proposed_pos);
     assert!(!solution.occupied(proposed_pos));
     let candidate_tile: &Tile = tiles.get(&cand.tile_id).expect("candidate not in tile map");
     for neighbour_direction in Direction::all().iter() {
-	println!("checking for a neighbour of {} in direction: {}",
+	log::debug!("checking for a neighbour of {} in direction: {}",
 		 proposed_pos, neighbour_direction);
 	let neighbour_pos = get_neighbour(proposed_pos, *neighbour_direction);
 	let (neighbour_id, neighbour_manipulation) = match solution.get_tile_at_position(
 	    &neighbour_pos) {
 	    None => {
-		println!("No need to check {} side of {} (i.e. location {}) as there is nothing there",
+		log::debug!("No need to check {} side of {} (i.e. location {}) as there is nothing there",
 			 neighbour_direction, proposed_pos, neighbour_pos);
 		continue;
 	    }
 	    Some(x) => x,
 	};
-	println!("Neighbour at {} is tile {} ({})",
+	log::debug!("Neighbour at {} is tile {} ({})",
 		 neighbour_pos, neighbour_id, neighbour_manipulation);
 	let neighbour: &Tile = tiles.get(&neighbour_id).expect("missing neighbour");
 	if !edge_match(&candidate_tile.manipulated(&cand.manipulation).view(),
 		       &neighbour_direction,
 		       &neighbour.manipulated(&neighbour_manipulation).view()) {
-	    println!("candidate_fits_neighbours: no, tile {} cannot be placed at {} becauise it does not match its neighbour {} at {}",
+	    log::debug!("candidate_fits_neighbours: no, tile {} cannot be placed at {} becauise it does not match its neighbour {} at {}",
 		     cand.tile_id, proposed_pos, neighbour_id, neighbour_pos);
 	    return false;
 	} else {
-	    println!("OK so far");
+	    log::debug!("OK so far");
 	}
     }
-    println!("candidate_fits_neighbours: result is yes, tile {} can be placed at {}",
+    log::debug!("candidate_fits_neighbours: result is yes, tile {} can be placed at {}",
 	     cand.tile_id, proposed_pos);
     true
 }
@@ -720,7 +721,7 @@ fn get_candidates(tiles: &HashMap<TileId, Tile>,
 	    continue;
 	}
 	if candidate_fits_neighbours(cand, &empty_pos, tiles, solution) {
-	    println!("candidate {:?} would fit at {}", cand, empty_pos);
+	    log::debug!("candidate {:?} would fit at {}", cand, empty_pos);
 	    result.entry(cand.tile_id).or_insert_with(Vec::new).push(cand.manipulation);
 	}
     }
@@ -738,7 +739,7 @@ fn solve1x(tiles: &HashMap<TileId, Tile>,
     }
 
     for (t, (pos, manip)) in solution.tile_to_position.iter() {
-	println!("solve1x: tile {} is at {} ({})", t, pos, manip);
+	log::debug!("solve1x: tile {} is at {} ({})", t, pos, manip);
     }
 
     let mut progress = false;
@@ -746,16 +747,16 @@ fn solve1x(tiles: &HashMap<TileId, Tile>,
 	let pos = get_neighbour(&exposed_edge.pos, exposed_edge.direction);
 	let candidates: HashMap<TileId, Vec<Manipulation>> =
 	    get_candidates(tiles, ix, solution, exposed_edge);
-	println!("There are {} candidate tiles for occupation of {}",
+	log::debug!("There are {} candidate tiles for occupation of {}",
 		 candidates.len(), pos);
 	if candidates.len() > 1 {
-	    println!("Since there's more than one option for {} we will defer filling that spot for now.", pos);
+	    log::debug!("Since there's more than one option for {} we will defer filling that spot for now.", pos);
 	} else {
 	    for (tile_id, manipulations) in candidates.iter() {
-		println!("Tile {} will fit at {} in {} different ways",
+		log::debug!("Tile {} will fit at {} in {} different ways",
 			 tile_id, pos, manipulations.len());
 		if manipulations.len() > 1 {
-		    println!("Since there's more than one way to fit {} into {} we will defer filling that spot for now.", tile_id, pos);
+		    log::debug!("Since there's more than one way to fit {} into {} we will defer filling that spot for now.", tile_id, pos);
 		} else {
 		    // We have just one possible tile and just one possible orientation.
 		    for manip in manipulations {
@@ -784,7 +785,7 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
     place(initial, initial_manip, &Position{x: 0, y: 0}, tiles, ix,
 	  &mut solution, &mut todo);
     while !todo.is_empty() {
-	println!("solve1: {}/{} tiles left to place", todo.len(), tiles.len());
+	log::debug!("solve1: {}/{} tiles left to place", todo.len(), tiles.len());
 	let before = todo.len();
 	solve1x(tiles, ix, &mut solution, &mut todo);
 	let after = todo.len();
@@ -792,13 +793,13 @@ fn solve1(tiles: &HashMap<TileId, Tile>,
 	    panic!("solve1: no progress was made in call to solve1x.");
 	}
     }
-    println!("solve1: all {} tiles are in place.", tiles.len());
+    log::debug!("solve1: all {} tiles are in place.", tiles.len());
     solution
 }
 
 fn part1(tiles: &HashMap<TileId, Tile>) -> Result<(), String> {
     let ix = make_tile_index(tiles);
-    println!("part1: tile index is: {:?}", ix);
+    log::debug!("part1: tile index is: {:?}", ix);
     let sol = solve1(tiles, &ix, &Manipulation::noop());
     Ok(())
 }
@@ -817,6 +818,9 @@ fn run() -> Result<(), String> {
 }
 
 fn main() {
+    // the env logger is configured with $RUST_LOG.
+    // For example RUST_LOG=debug day20
+    pretty_env_logger::init();
     std::process::exit(match run() {
 	Ok(_) => 0,
 	Err(err) => {

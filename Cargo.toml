@@ -67,5 +67,7 @@ authors = ["James Youngman <james@youngman.org>"]
 regex = ">= 1.0.0"
 lazy_static = ">=1.4.0"
 itertools = ">= 0.10"
-# 0.14.0 requires rust 1.42 and I'm currently using 1.41.1.
+# ndarray 0.14.0 requires rust 1.42 and I'm currently using 1.41.1.
 ndarray = "<0.14.0"
+pretty_env_logger = "0.4.0"
+log = "0.4.11"
