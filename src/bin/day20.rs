@@ -981,10 +981,15 @@ fn find_image_locations(haystack: &Array2<u8>, mask: &Array2<u8>) -> Vec<(i32, i
 	.collect()
 }
 
+fn count_ones(m: &Array2<u8>) -> usize {
+    m.iter().filter(|&&x| x == 1).count()
+}
+
+
 fn measure_roughness(bitmap: &Array2<u8>,
 		     locations: &Vec<(i32, i32)>,
-		     mask: &Array2<u8>) -> i64 {
-    panic!("measure_roughness is not implemented");
+		     mask: &Array2<u8>) -> usize {
+    count_ones(bitmap) - (locations.len() * count_ones(mask))
 }
 
 fn part2(tiles: &HashMap<TileId, Tile>,
@@ -992,8 +997,15 @@ fn part2(tiles: &HashMap<TileId, Tile>,
     let big_bitmap = assemble_big_bitmap(tiles, solution);
     println!("big bitmap is:\n{}", render_bitmap(&big_bitmap));
     let nessie_mask = nessie();
+    let mut done = false;
     for rot in vec![Rotation::Zero, Rotation::One, Rotation::Two, Rotation::Three] {
+	if done {
+	    break;
+	}
 	for flip in vec![false, true] {
+	    if done {
+		break;
+	    }
 	    let manip = Manipulation{rot, flip};
 	    let tweaked = manip.on(&big_bitmap);
 	    let locations = find_image_locations(&tweaked, &nessie_mask);
@@ -1001,6 +1013,8 @@ fn part2(tiles: &HashMap<TileId, Tile>,
 	    if !locations.is_empty() {
 		println!("Part 2: roughness is {}",
 			 measure_roughness(&tweaked, &locations, &nessie_mask));
+		done = true;
+		break;
 	    }
 	}
     }
