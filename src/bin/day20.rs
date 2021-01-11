@@ -903,8 +903,6 @@ fn assemble_big_bitmap(tiles: &HashMap<TileId, Tile>,
     };
     let shape = ((tile_height * (maxy - miny + 1)) as usize,
 		 (tile_width * (maxx - minx + 1)) as usize);
-    log::debug!("shape of interior tiles is {:?}", (tile_height, tile_width));
-    log::debug!("shape of assembled tile is {:?}", shape);
     // We use 2 as a marker value to determine whether we have
     // correctly set all the elements in the output array from the
     // data in the solution.
@@ -914,7 +912,6 @@ fn assemble_big_bitmap(tiles: &HashMap<TileId, Tile>,
 	for (j, x) in (minx..=maxx).enumerate() {
 	    let xleft = j as i32 * tile_width;
 	    let b = interior_tile_at(&Position{x,y}, tiles, solution);
-	    log::debug!("shape of interior tile for assignment is {:?}", b.shape());
 	    result.slice_mut(s![ytop..ytop+tile_height,
 				xleft..xleft+tile_width]).assign(&b);
 	}
@@ -992,36 +989,30 @@ fn measure_roughness(bitmap: &Array2<u8>,
     count_ones(bitmap) - (locations.len() * count_ones(mask))
 }
 
-fn part2(tiles: &HashMap<TileId, Tile>,
-	 solution: &TileLocationSolution) -> Result<(), String> {
+fn solve2(tiles: &HashMap<TileId, Tile>,
+	  solution: &TileLocationSolution) -> usize {
     let big_bitmap = assemble_big_bitmap(tiles, solution);
-    println!("big bitmap is:\n{}", render_bitmap(&big_bitmap));
+    log::debug!("big bitmap is:\n{}", render_bitmap(&big_bitmap));
     let nessie_mask = nessie();
-    let mut done = false;
     for rot in vec![Rotation::Zero, Rotation::One, Rotation::Two, Rotation::Three] {
-	if done {
-	    break;
-	}
 	for flip in vec![false, true] {
-	    if done {
-		break;
-	    }
 	    let manip = Manipulation{rot, flip};
 	    let tweaked = manip.on(&big_bitmap);
 	    let locations = find_image_locations(&tweaked, &nessie_mask);
 	    log::info!("Part 2: monster locations ({}): {:?}", manip, locations);
 	    if !locations.is_empty() {
-		println!("Part 2: roughness is {}",
-			 measure_roughness(&tweaked, &locations, &nessie_mask));
-		done = true;
-		break;
+		return measure_roughness(&tweaked, &locations, &nessie_mask);
 	    }
 	}
     }
-
-    Ok(())
+    panic!("found no sea monsters");
 }
 
+fn part2(tiles: &HashMap<TileId, Tile>,
+	 solution: &TileLocationSolution) -> Result<(), String> {
+    println!("Part 2: roughness is {}", solve2(tiles, solution));
+    Ok(())
+}
 
 fn run() -> Result<(), String> {
     self_test()?;
