@@ -46,7 +46,7 @@ struct Ingredient {
     name: String,
     possible_allergens: StringSet,
     excluded_allergens: StringSet,
-    definite_allergens: StringSet,
+    definite_allergen: Option<String>,
 }
 
 impl Ingredient {
@@ -55,12 +55,12 @@ impl Ingredient {
 	    name: name.to_string(),
 	    possible_allergens: all_allergens.clone(),
 	    excluded_allergens: StringSet::new(),
-	    definite_allergens: StringSet::new(),
+	    definite_allergen: None,
 	}
     }
 
     fn is_non_allergenic(&self) -> Option<bool> {
-	if self.definite_allergens.len() > 0 {
+	if self.definite_allergen.is_some() {
 	    Some(false)
 	} else if self.possible_allergens.len() > 0 {
 	    None
@@ -86,12 +86,19 @@ impl Ingredient {
 
     fn conclude_must_contain(&mut self, allergen: &str) {
 	assert!(!self.excluded_allergens.contains(allergen));
-	self.definite_allergens.insert(allergen.to_string());
+	assert!(self.definite_allergen.is_none());
+	self.definite_allergen = Some(allergen.to_string());
 	self.possible_allergens.remove(allergen);
     }
 
+
     fn conclude_must_not_contain(&mut self, allergen: &str) {
-	assert!(!self.definite_allergens.contains(allergen));
+	match &self.definite_allergen {
+	    None => (),
+	    Some(a) => {
+		assert!(a != allergen, "we already thought this ingredient did contain that");
+	    }
+	}
 	self.excluded_allergens.insert(allergen.to_string());
 	self.possible_allergens.remove(allergen);
     }
@@ -168,15 +175,16 @@ fn solve1(lines: &Vec<String>)
 	    return Err("not solvable".to_string());
 	}
     }
+    let empty = &"".to_string();
     for (ing_name, ing) in &all_ingredients {
 	println!("{}:", ing_name);
-	println!("   contains        : {}", itertools::join(&ing.definite_allergens, " "));
+	println!("   contains        : {}", ing.definite_allergen.as_ref().unwrap_or(empty));
 	println!("   does not contain: {}",itertools::join(&ing.excluded_allergens, " "));
     }
     Ok((parsed_input, all_ingredients))
 }
 
-fn part1(lines: &Vec<String>) -> Result<(), String> {
+fn part1(lines: &Vec<String>) -> Result<HashMap<String, Ingredient>, String> {
     let (parsed_input, ingredients) = solve1(lines)?;
     let non_alllergenic: StringSet = ingredients.values()
 	.filter_map(|ing| match ing.is_non_allergenic() {
@@ -185,13 +193,12 @@ fn part1(lines: &Vec<String>) -> Result<(), String> {
 	})
 	.collect();
     let mentions = parsed_input.iter()
-	.flat_map(|(ingredent_names, _)| ingredent_names.iter())
-	.cloned()
+	.flat_map(|(ingredent_names, _)| ingredent_names.iter().cloned())
 	.filter(|ing_name| non_alllergenic.contains(ing_name))
 	.count();
 
     println!("Part 1: non-allergen count is {}", mentions);
-    Ok(())
+    Ok(ingredients)
 }
 
 
