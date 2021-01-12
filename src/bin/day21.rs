@@ -3,9 +3,9 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate lazy_static;
 extern crate regex;
 
-use std::fmt;
 use std::io;
 use std::io::BufRead;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use regex::Regex;
@@ -151,7 +151,6 @@ fn solve1(lines: &Vec<String>)
 	}
     }
 
-    log::debug!("all_allergens: {:?}", all_allergens);
     loop {
 	let prev_unknowns = count_unknowns(&all_ingredients);
 	if prev_unknowns == 0 {
@@ -175,11 +174,16 @@ fn solve1(lines: &Vec<String>)
 	    return Err("not solvable".to_string());
 	}
     }
-    let empty = &"".to_string();
-    for (ing_name, ing) in &all_ingredients {
-	println!("{}:", ing_name);
-	println!("   contains        : {}", ing.definite_allergen.as_ref().unwrap_or(empty));
-	println!("   does not contain: {}",itertools::join(&ing.excluded_allergens, " "));
+
+    let allergenic_ingredients: HashMap<String, String> = all_ingredients.values()
+		  .filter_map(|ing| match ing.definite_allergen.as_ref() {
+		      Some(a) => Some((ing.name.to_string(), a.to_string())),
+		      None => None
+		  })
+		  .collect();
+    let width: usize = allergenic_ingredients.iter().map(|(n, _)| n.len()).max().unwrap_or(1);
+    for (ing_name, allergen) in &allergenic_ingredients {
+	println!("{:<width$} contains {}", ing_name, allergen, width=width);
     }
     Ok((parsed_input, all_ingredients))
 }
@@ -202,8 +206,21 @@ fn part1(lines: &Vec<String>) -> Result<HashMap<String, Ingredient>, String> {
 }
 
 
-fn part2(lines: &Vec<String>) -> usize {
-    0
+fn part2(all_ingredients: &HashMap<String, Ingredient>) -> Result<(), String> {
+    // We use a BTreeMap here specifically because we want to rely on
+    // iteration in key order.
+    let allergen_to_ingredient_map: BTreeMap<String, String> =
+	all_ingredients.values()
+	.filter_map(|ing| match &ing.definite_allergen {
+	    Some(a) => Some((a.to_string(), ing.name.to_string())),
+	    None => None,
+	})
+	.collect();
+    println!("Part 2: ingredients sorted by allergen name: {}",
+	     itertools::join(allergen_to_ingredient_map.iter()
+			     .map(|(_, ingredient_name)| ingredient_name),
+			     ","));
+    Ok(())
 }
 
 fn run() -> Result<(), String> {
@@ -218,7 +235,8 @@ fn run() -> Result<(), String> {
 	    }
 	}
     }
-    part1(&lines)?;
+    let ingredients = part1(&lines)?;
+    part2(&ingredients)?;
     Ok(())
 }
 
