@@ -33,14 +33,6 @@ fn parse(lines: &Vec<String>) -> Result<Vec<(StringSet, StringSet)>, String> {
 }
 
 
-fn first<T>(pair: &(T, T)) -> &T {
-    return &pair.0;
-}
-
-fn second<T>(pair: &(T, T)) -> &T {
-    return &pair.1;
-}
-
 #[derive(Debug)]
 struct Ingredient {
     name: String,
@@ -89,8 +81,8 @@ impl Ingredient {
 	assert!(self.definite_allergen.is_none());
 	self.definite_allergen = Some(allergen.to_string());
 	self.possible_allergens.remove(allergen);
+	assert!(self.possible_allergens.is_empty());
     }
-
 
     fn conclude_must_not_contain(&mut self, allergen: &str) {
 	match &self.definite_allergen {
@@ -132,9 +124,9 @@ fn solve1(lines: &Vec<String>)
 		    String> {
     let parsed_input: Vec<(StringSet, StringSet)> = parse(lines)?;
     let all_allergens: StringSet =
-	parsed_input.iter().map(second).flatten().cloned().collect();
+	parsed_input.iter().map(|(_, a)| a).flatten().cloned().collect();
     let mut all_ingredients: HashMap<String, Ingredient> =
-	parsed_input.iter().map(first).flatten()
+	parsed_input.iter().map(|(i, _)| i).flatten()
 	.map(|ing_name| (ing_name.to_string(), Ingredient::new(ing_name, &all_allergens)))
 	.collect();
     let all_ingredient_names: StringSet = all_ingredients.keys().cloned().collect();
