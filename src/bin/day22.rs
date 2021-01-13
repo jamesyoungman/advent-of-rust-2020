@@ -8,6 +8,7 @@ use std::io;
 use std::io::BufRead;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+
 use regex::Regex;
 
 lazy_static! {
@@ -49,38 +50,27 @@ fn get_deck(who: i32, lines: &Vec<String>) -> Result<VecDeque<Card>, String> {
 
 #[derive(PartialOrd,Ord,PartialEq,Eq,Hash)]
 struct PlayerHand {
-    player: i32,
     cards: VecDeque<Card>,
 }
 
 impl Clone for PlayerHand {
     fn clone(&self) -> PlayerHand {
 	PlayerHand{
-	    player: self.player,
 	    cards: self.cards.clone(),
 	}
     }
 }
 
-
 impl PlayerHand {
     fn new(who: i32, config_lines: &Vec<String>) -> Result<PlayerHand, String> {
-	let hand = get_deck(who, config_lines)?;
-	Ok(PlayerHand {
-	    player: who,
-	    cards: hand,
-	})
+	let cards = get_deck(who, config_lines)?;
+	Ok(PlayerHand{cards})
     }
 
     fn score(&self) -> usize {
 	let total = self.cards.iter().rev().enumerate()
-	    .map(|(i, c)| {
-		let m = i + 1;
-		log::debug!("score: + {:>2} * {:>2}", m, *c);
-		m * (*c) as usize
-	    })
+	    .map(|(i, c)| (i + 1) * (*c) as usize)
 	    .sum();
-	log::debug!("score: = {:>9}", total);
 	total
     }
 
