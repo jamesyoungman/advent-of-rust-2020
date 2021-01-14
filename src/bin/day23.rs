@@ -8,25 +8,36 @@ use std::io::Read;
 use std::io;
 
 #[derive(Debug)]
+struct Cup {
+    label: u32,
+    succ: usize,
+}
+
+impl fmt::Display for Cup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+	write!(f, "{}", self.label)
+    }
+}
+
+#[derive(Debug)]
 struct CupCircle {
-    labels: Vec<u32>,
-    pos_to_succ: Vec<usize>,
+    cups: Vec<Cup>,
     label_to_pos: Vec<usize>,
+    current_pos: usize,
 }
 
 impl CupCircle {
     fn new(v: &Vec<u32>) -> CupCircle {
+	if v.is_empty() {
+	    panic!("CupCircle::new cannot accept an empty Vec");
+	}
 	CupCircle{
-	    labels: (0..v.len()).map(|i| v[i] as u32).collect(),
-	    pos_to_succ: (0..v.len())
-		.map(|i| {
-		    if i >= v.len()
-		    {
-			0
-		    } else {
-			i + 1
-		    }
-		} as usize)
+	    current_pos: 0,
+	    cups: (0..v.len())
+		.map(|i| Cup{
+		    label: v[i] as u32,
+		    succ: if i >= v.len() { 0 } else { i + 1 },
+		})
 		.collect(),
 	    label_to_pos: itertools::sorted(
 		v.iter().enumerate()
@@ -37,23 +48,24 @@ impl CupCircle {
 	}
     }
 
+    fn label_of_current(&self) -> u32 {
+	self.cups[self.current_pos].label
+    }
+
     fn check(&self) {
 	let mut labels_seen: HashSet<u32> = HashSet::new();
-	for label in &self.labels {
-	    if labels_seen.contains(&label) {
-		panic!(format!("duplicate label {}", label));
+	let mut succ_seen: HashSet<usize> = HashSet::new();
+	for c in &self.cups {
+	    if labels_seen.contains(&c.label) {
+		panic!(format!("duplicate label {}", c.label));
 	    }
-	    labels_seen.insert(*label);
+	    labels_seen.insert(c.label);
+	    if succ_seen.contains(&c.succ) {
+		panic!(format!("duplicate successor {}", c.succ));
+	    }
+	    succ_seen.insert(c.succ);
 	}
 	drop(labels_seen);
-
-	let mut succ_seen: HashSet<usize> = HashSet::new();
-	for succ in &self.pos_to_succ {
-	    if succ_seen.contains(&succ) {
-		panic!(format!("duplicate successor {}", succ));
-	    }
-	    succ_seen.insert(*succ);
-	}
 	drop(succ_seen);
 
 	let mut pos_seen: HashSet<usize> = HashSet::new();
@@ -62,7 +74,7 @@ impl CupCircle {
 		panic!(format!("duplicate position {}", pos));
 	    }
 	    pos_seen.insert(*pos);
-	    assert_eq!(*pos, self.get_pos(self.labels[*pos]));
+	    assert_eq!(*pos, self.get_pos(self.cups[*pos].label));
 	}
 	drop(pos_seen);
     }
@@ -75,12 +87,14 @@ impl CupCircle {
     }
 
     fn extend(&mut self, want: u32) {
-	let mut max = match self.labels.iter().max() {
-	    Some(n) => *n,
+	let mut max = match self.cups.iter().map(|c| c.label).max() {
+	    Some(n) => n,
 	    None => {
 		if want > 0 {
-		    self.labels.push(1);
-		    self.pos_to_succ.push(0);
+		    self.cups.push(Cup{
+			label: 1,
+			succ: 0,
+		    });
 		    self.label_to_pos.push(0);
 		    1
 		} else {
@@ -88,20 +102,41 @@ impl CupCircle {
 		}
 	    }
 	};
-	*self.pos_to_succ.iter_mut().rev().next().unwrap() = self.pos_to_succ.len();
-	self.labels.reserve(want as usize);
-	self.pos_to_succ.reserve(want as usize);
+	self.cups.iter_mut().rev().next().unwrap().succ = self.cups.len();
+	self.cups.reserve(want as usize);
 	self.label_to_pos.reserve(want as usize);
 	while want > max {
 	    max += 1;
-	    let here = self.labels.len();
-	    self.labels.push(max);
-	    self.pos_to_succ.push(here + 1);
+	    let here = self.cups.len();
+	    self.cups.push(
+		Cup{
+		    label: max,
+		    succ: here + 1,
+		}
+	    );
 	    self.label_to_pos.push(here);
 	}
-	*self.pos_to_succ.iter_mut().rev().next().unwrap() = 0;
+	self.cups.iter_mut().rev().next().unwrap().succ = 0;
     }
 }
+
+impl fmt::Display for CupCircle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+	let current = self.label_of_current();
+	let mut prefix = "";
+	for c in self {
+	    if c == current {
+		write!(f, "{}({})", prefix, c)?;
+	    } else {
+		write!(f, "{}{}", prefix, c)?;
+	    }
+	    prefix = " ";
+	}
+	Ok(())
+    }
+}
+
+
 
 struct CupCircleIter<'r> {
     pos: Option<usize>,
@@ -117,11 +152,11 @@ impl Iterator for CupCircleIter<'_> {
 		None
 	    }
 	    Some(p) => {
-		self.pos = match self.circle.pos_to_succ[p] {
+		self.pos = match self.circle.cups[p].succ {
 		    0 => None,
 		    next => Some(next),
 		};
-		Some(self.circle.labels[p])
+		Some(self.circle.cups[p].label)
 	    }
 	}
     }
@@ -133,7 +168,7 @@ impl<'a> IntoIterator for &'a CupCircle {
 
     fn into_iter(self) -> Self::IntoIter {
 	CupCircleIter{
-	    pos: if self.labels.is_empty() { None } else { Some(0) },
+	    pos: if self.cups.is_empty() { None } else { Some(0) },
 	    circle: &self,
 	}
     }
@@ -143,10 +178,10 @@ impl<'a> IntoIterator for &'a CupCircle {
 
 fn show(label: &str, cups: &CupCircle) {
     println!("Part 1: {} cups are:", label);
-    for (i, c) in cups.labels.iter().enumerate() {
+    for (i, c) in cups.cups.iter().enumerate() {
 	println!("{:>2}: {:?} succ={} (label_to_pos[{}]={})",
-		 i, c, cups.pos_to_succ[i],
-		 c, cups.get_pos(*c));
+		 i, c.label, c.succ,
+		 c, cups.get_pos(c.label));
     }
 }
 
@@ -158,7 +193,7 @@ fn part1(initial: &Vec<u32>) -> Result<(), String>
     cups.extend(20);
     show("extended", &cups);
     cups.check();
-    println!("Part 1: cups debug: {:?}", cups);
+    println!("Part 1: cups: {}", cups);
     Ok(())
 }
 
