@@ -1,11 +1,16 @@
 extern crate log;
 extern crate pretty_env_logger;
 use std::fmt;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Read;
 
 use std::io;
+
+#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Clone,Copy,Hash)]
+enum Check {
+    Always,
+    Never
+}
 
 #[derive(Debug)]
 struct Cup {
@@ -19,24 +24,43 @@ impl fmt::Display for Cup {
     }
 }
 
-#[derive(Debug)]
 struct CupCircle {
+    verbose: bool,
+    checks: Check,
     cups: Vec<Cup>,
     label_to_pos: Vec<usize>,
     current_pos: usize,
+    max_label: u32,
+}
+
+impl fmt::Debug for CupCircle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+	write!(f, "CupCircle{{\nverbose: {}\nchecks: {:?}\ncups: [\n",
+	       self.verbose, self.checks)?;
+	for i in 0..self.cups.len() {
+	    write!(f, "  [{}] = {:?}", i, self.cups[i])?;
+	}
+	f.write_str("]\nlabel_to_pos: [\n")?;
+	for i in 0..self.label_to_pos.len() {
+	    write!(f, "  [{}] for {} = {:?}", i, i+1, self.label_to_pos[i])?;
+	}
+	write!(f, "]\ncurrent_pos={}, max_label={}\n}}", self.current_pos, self.max_label)
+    }
 }
 
 impl CupCircle {
-    fn new(v: &Vec<u32>) -> CupCircle {
+    fn new(verbose: bool, checks: Check, v: &Vec<u32>) -> CupCircle {
 	if v.is_empty() {
 	    panic!("CupCircle::new cannot accept an empty Vec");
 	}
 	CupCircle{
+	    verbose,
+	    checks,
 	    current_pos: 0,
 	    cups: (0..v.len())
 		.map(|i| Cup{
 		    label: v[i] as u32,
-		    succ: if i >= v.len() { 0 } else { i + 1 },
+		    succ: if i + 1 >= v.len() { 0 } else { i + 1 },
 		})
 		.collect(),
 	    label_to_pos: itertools::sorted(
@@ -45,6 +69,7 @@ impl CupCircle {
 		.into_iter()
 		.map(|(_, pos)| pos)
 		.collect(),
+	    max_label: *v.iter().max().expect("Vec should not be empty"),
 	}
     }
 
@@ -52,10 +77,70 @@ impl CupCircle {
 	self.cups[self.current_pos].label
     }
 
+    fn play(&mut self, move_number: usize) {
+	if self.verbose {
+	    println!("\n-- move {} --\ncups: {}", move_number, self);
+	}
+	self.check();
+	 // remove 3 cups.
+	let pos1 = self.cups[self.current_pos].succ;
+	let pos2 = self.cups[pos1].succ;
+	let pos3 = self.cups[pos2].succ;
+	if self.verbose {
+	    println!("pick up: {}, {}, {}",
+		     self.cups[pos1].label,
+		     self.cups[pos2].label,
+		     self.cups[pos3].label);
+	}
+	self.cups[self.current_pos].succ = self.cups[pos3].succ;
+	 // select the destination cup.
+	let mut dest_label = self.cups[self.current_pos].label - 1;
+	if dest_label < 1 {
+	    dest_label = self.max_label;
+	}
+	while dest_label == self.cups[pos1].label
+	    || dest_label == self.cups[pos2].label
+	    || dest_label == self.cups[pos3].label {
+	    dest_label -= 1;
+	    if dest_label < 1 {
+		dest_label = self.max_label;
+	    }
+	}
+	let dest_pos = self.get_pos(dest_label);
+	if self.verbose {
+	    println!("destination: {} (at position {})", dest_label, dest_pos);
+	}
+	// Splice the 3 taken cups back in immediately after the
+	// destination cup.
+	let tail_pos = self.cups[dest_pos].succ;
+	self.cups[pos3].succ = tail_pos;
+	self.cups[dest_pos].succ = pos1;
+	// Select a new current cup.
+	self.current_pos = self.cups[self.current_pos].succ;
+	assert!(self.current_pos < self.cups.len());
+	self.check();
+    }
+
     fn check(&self) {
+	if self.checks == Check::Never {
+	    return;
+	}
+	if self.current_pos >= self.cups.len() {
+	    panic!(format!("current_pos {} is out-of-range", self.current_pos));
+	}
+	if self.max_label as usize != self.cups.len() {
+	    panic!(format!("max_label {} is unexpected; should be {}",
+			   self.max_label, self.cups.len()));
+	}
 	let mut labels_seen: HashSet<u32> = HashSet::new();
 	let mut succ_seen: HashSet<usize> = HashSet::new();
-	for c in &self.cups {
+	for (i, c) in self.cups.iter().enumerate() {
+	    if c.succ >= self.cups.len() {
+		panic!(format!("cup {} has out-of-range succ value {}", i, c.succ));
+	    }
+	    if c.label < 1 || c.label as usize > self.cups.len() {
+		panic!(format!("cup {} has out-of-range label value {}", i, c.label));
+	    }
 	    if labels_seen.contains(&c.label) {
 		panic!(format!("duplicate label {}", c.label));
 	    }
@@ -87,30 +172,16 @@ impl CupCircle {
     }
 
     fn extend(&mut self, want: u32) {
-	let mut max = match self.cups.iter().map(|c| c.label).max() {
-	    Some(n) => n,
-	    None => {
-		if want > 0 {
-		    self.cups.push(Cup{
-			label: 1,
-			succ: 0,
-		    });
-		    self.label_to_pos.push(0);
-		    1
-		} else {
-		    return;
-		}
-	    }
-	};
+	assert!(!self.cups.is_empty());
 	self.cups.iter_mut().rev().next().unwrap().succ = self.cups.len();
 	self.cups.reserve(want as usize);
 	self.label_to_pos.reserve(want as usize);
-	while want > max {
-	    max += 1;
+	while want > self.max_label {
+	    self.max_label += 1;
 	    let here = self.cups.len();
 	    self.cups.push(
 		Cup{
-		    label: max,
+		    label: self.max_label,
 		    succ: here + 1,
 		}
 	    );
@@ -152,6 +223,10 @@ impl Iterator for CupCircleIter<'_> {
 		None
 	    }
 	    Some(p) => {
+		if p >= self.circle.cups.len() {
+		    panic!(format!("CupCircleIter: pos {} out of range:\n{:?}",
+				   p, self.circle));
+		}
 		self.pos = match self.circle.cups[p].succ {
 		    0 => None,
 		    next => Some(next),
@@ -167,6 +242,7 @@ impl<'a> IntoIterator for &'a CupCircle {
     type IntoIter = CupCircleIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
+	self.check();
 	CupCircleIter{
 	    pos: if self.cups.is_empty() { None } else { Some(0) },
 	    circle: &self,
@@ -176,8 +252,8 @@ impl<'a> IntoIterator for &'a CupCircle {
 
 
 
-fn show(label: &str, cups: &CupCircle) {
-    println!("Part 1: {} cups are:", label);
+fn show(part: u32, label: &str, cups: &CupCircle) {
+    println!("Part {}: {} cups are:", part, label);
     for (i, c) in cups.cups.iter().enumerate() {
 	println!("{:>2}: {:?} succ={} (label_to_pos[{}]={})",
 		 i, c.label, c.succ,
@@ -185,15 +261,54 @@ fn show(label: &str, cups: &CupCircle) {
     }
 }
 
+fn cups_succ(label: u32, n: usize, cups: &CupCircle) -> u32 {
+    let mut pos = cups.get_pos(label);
+    for _ in 0..n {
+	pos = cups.cups[pos].succ;
+    }
+    cups.cups[pos].label
+}
+
+
+fn play_moves(count: usize, cups: &mut CupCircle) {
+    for move_number in 1..=count {
+	cups.play(move_number);
+    }
+}
+
 fn part1(initial: &Vec<u32>) -> Result<(), String>
 {
-    let mut cups = CupCircle::new(initial);
-    show("initial", &cups);
+    let mut cups = CupCircle::new(true, Check::Always, initial);
+    show(1, "initial", &cups);
     cups.check();
-    cups.extend(20);
-    show("extended", &cups);
+    play_moves(100, &mut cups);
+    if cups.verbose {
+	println!("\n-- final --\ncups: {}", cups);
+    }
+    print!("Part 1: labels after 1: ");
+    let mut pos: usize = cups.cups[cups.get_pos(1)].succ as usize;
+    for _ in 0..(cups.cups.len()-1) {
+	let cup = &cups.cups[pos as usize];
+	print!("{}", cup.label);
+	pos = cup.succ as usize;
+    }
+    println!("");
+    Ok(())
+}
+
+fn part2(initial: &Vec<u32>) -> Result<(), String>
+{
+    let mut cups = CupCircle::new(false, Check::Never, initial);
+    show(2, "initial (before extending)", &cups);
     cups.check();
-    println!("Part 1: cups: {}", cups);
+    cups.extend(12);
+    cups.check();
+    cups.extend(1000000);
+    play_moves(10 * 1000 * 1000, &mut cups);
+    let succ1 = cups_succ(1, 1, &cups);
+    let succ2 = cups_succ(1, 2, &cups);
+    println!("Part 2: product is {} * {} = {}",
+	     succ1, succ2, (succ1 as usize) * (succ2 as usize));
     Ok(())
 }
 
@@ -214,6 +329,7 @@ fn run() -> Result<(), String> {
 	})
 	.collect();
     part1(&labels)?;
+    part2(&labels)?;
     Ok(())
 }
 
