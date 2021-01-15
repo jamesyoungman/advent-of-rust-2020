@@ -234,7 +234,7 @@ fn run() -> Result<(), String> {
 
 fn main() {
     // the env logger is configured with $RUST_LOG.
-    // For example RUST_LOG=debug day20
+    // For example RUST_LOG=debug day21
     pretty_env_logger::init();
     std::process::exit(match run() {
 	Ok(_) => 0,
