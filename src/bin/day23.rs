@@ -300,9 +300,6 @@ fn part2(initial: &Vec<u32>) -> Result<(), String>
 {
     let mut cups = CupCircle::new(false, Check::Never, initial);
     show(2, "initial (before extending)", &cups);
-    cups.check();
-    cups.extend(12);
-    cups.check();
     cups.extend(1000000);
     play_moves(10 * 1000 * 1000, &mut cups);
     let succ1 = cups_succ(1, 1, &cups);
