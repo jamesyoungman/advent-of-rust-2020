@@ -22,22 +22,16 @@ fn binary_search(mut lower_incl: i32, mut upper_excl: i32,
 	}
     }
     if upper_excl == lower_incl + 1 {
-	return Ok(lower_incl)
+	Ok(lower_incl)
+    } else {
+	Err("undetermined, insuffiicient directives")
     }
-    return Err("undetermined, insuffiicient directives");
-}
-
-fn seat_id(row: i32, col: i32) -> i32 {
-    row * 8 + col
 }
 
 fn decode_seat(directions: &str) -> Result<i32, &'static str> {
-    match (binary_search(0, 128, 'F', 'B', &directions[0..7]),
-	   binary_search(0, 8, 'L', 'R', &directions[7..])) {
-	(Ok(r), Ok(c)) => Ok(seat_id(r, c)),
-	(Err(e), _) => Err(e),
-	(_, Err(e)) => Err(e),
-    }
+    let r = binary_search(0, 128, 'F', 'B', &directions[0..7])?;
+    let c = binary_search(0, 8, 'L', 'R', &directions[7..])?;
+    Ok(r * 8 + c)
 }
 
 fn part1(seats: &BTreeSet<i32>) -> Result<(), &'static str> {
@@ -62,20 +56,15 @@ fn part2(seats: &BTreeSet<i32>) -> Result<(), &'static str> {
 }
 
 fn run() -> Result<(), String> {
-    let seats_or_error: Result<BTreeSet<i32>, String> = io::BufReader::new(io::stdin()).lines()
+    let seats = io::BufReader::new(io::stdin()).lines()
 	.map(|x| match x {
 	    Err(e) => Err(format!("I/O error: {}", e)),
 	    Ok(line) => decode_seat(&line.as_str()).map_err(str::to_string),
 	})
-	.collect();
-    match seats_or_error {
-	Ok(seats) => {
-            part1(&seats).map_err(str::to_string)?;
-            part2(&seats).map_err(str::to_string)?;
-            return Ok(());
-	}
-	Err(e) => Err(e),
-    }
+	.collect::<Result<BTreeSet<i32>, _>>()?;
+    part1(&seats).map_err(str::to_string)?;
+    part2(&seats).map_err(str::to_string)?;
+    Ok(())
 }
 
 fn main() {
