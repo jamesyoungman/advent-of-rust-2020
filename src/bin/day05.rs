@@ -6,12 +6,6 @@ use thiserror::Error;
 
 #[derive(Error,Debug)]
 pub enum SeatError {
-    #[error("too many seat directions")]
-    TooManyDirections,
-    #[error("insufficient seat directions")]
-    Underdetermined,
-    #[error("invalid direction character '{0}'")]
-    InvalidDirection(char),
     #[error("empty starting range")]
     EmptyStartingRange,
     #[error("input is empty")]
@@ -30,7 +24,8 @@ fn binary_search(mut lower_incl: i32, mut upper_excl: i32,
     }
     for choice in choices.chars() {
 	if upper_excl == lower_incl + 1 {
-	    return Err(SeatError::TooManyDirections);
+	    return Err(SeatError::InvalidInput(
+		"too many seat directions".to_string()));
 	}
 	let mid = lower_incl + (upper_excl - lower_incl)/2;
 	if choice == lower_directive {
@@ -38,13 +33,15 @@ fn binary_search(mut lower_incl: i32, mut upper_excl: i32,
 	} else if choice == upper_directive {
 	    lower_incl = mid
 	} else {
-	    return Err(SeatError::InvalidDirection(choice));
+	    return Err(SeatError::InvalidInput(
+		format!("invalid direction character '{}'", choice)));
 	}
     }
     if upper_excl == lower_incl + 1 {
 	Ok(lower_incl)
     } else {
-	Err(SeatError::Underdetermined)
+	Err(SeatError::InvalidInput(
+	    "insufficient seat directions".to_string()))
     }
 }
 
