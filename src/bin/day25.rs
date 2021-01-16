@@ -12,7 +12,10 @@ type Key = usize;
 
 #[derive(Error,Debug)]
 pub enum MyError {
-    #[error("input is invalid; {0}")]
+    #[error("input '{0}' is not a valid non-negative integer; {1}")]
+    InvalidConversion(String, std::num::ParseIntError),
+
+    #[error("input is invalid: {0}")]
     InvalidInput(String),
 
     #[error("Read error")]
@@ -26,9 +29,9 @@ fn read_input() -> Result<Vec<Key>, MyError> {
 	Err(source) => { return Err(MyError::ReadError{source}); },
     };
     let mut public_keys: Vec<Key> = Vec::new();
-    for item in buffer.split("\n").filter(|s| !s.is_empty()) {
+    for item in buffer.split_whitespace().filter(|s| !s.is_empty()) {
 	match item.parse() {
-	    Err(e) => { return Err(MyError::InvalidInput(format!("{}", e))) },
+	    Err(e) => { return Err(MyError::InvalidConversion(item.to_string(), e)); }
 	    Ok(n) => { public_keys.push(n); }
 	}
     }
@@ -61,6 +64,13 @@ fn run() -> Result<(), MyError> {
 	println!("public key is  {:>8}", pk);
 	println!("loop number is {:>8}", loop_num);
 	println!("");
+    }
+    match keys_and_loop_numbers.len() {
+	2 => (),
+	n => {
+	    return Err(MyError::InvalidInput(format!(
+		"expected 2 keys in the input, found {}", n)));
+	}
     }
     let ek0 = make_private_key(keys_and_loop_numbers[0].0, keys_and_loop_numbers[1].1);
     println!("encryption key is {:>8}", ek0);
