@@ -243,7 +243,7 @@ struct Tile {
 impl Tile {
     fn from_string(s: &str) -> Result<Tile, String> {
         let lines: Vec<String> = s.split('\n').map(str::to_string).collect();
-        if lines.len() == 0 {
+        if lines.is_empty() {
             return Err("Tiles must not be empty".to_string());
         }
         let id: TileId = match TILE_TITLE_RE.captures(&lines[0]) {
@@ -394,6 +394,8 @@ impl TileLocationSolution {
         self.position_to_tile.insert(*pos, tile.id);
 
         // Remove existing exposed edges which are now covered.
+        // Borrowing rules prevent the use of .retain() in its most
+        // obvious form.
         self.exposed_edges = self
             .exposed_edges
             .iter()
@@ -441,7 +443,7 @@ impl TileLocationSolution {
     }
 }
 
-fn decode_ascii_tile(id: &TileId, r: usize, c: usize, width: &usize, s: &Vec<char>) -> u8 {
+fn decode_ascii_tile(id: &TileId, r: usize, c: usize, width: &usize, s: &[char]) -> u8 {
     let pos: usize = (width + 1) * r + c;
     match s[pos] {
         '#' => 1,
@@ -492,7 +494,7 @@ Tile 4:
         rot: Rotation::One,
         flip: false,
     }
-    .on(&t4);
+    .on(t4);
     assert_eq!(
         t4_r1fn,
         arr2(&[
@@ -509,7 +511,7 @@ Tile 4:
         rot: Rotation::One,
         flip: true,
     }
-    .on(&t4);
+    .on(t4);
     log::debug!("t4={}", t4);
     log::debug!("t4_r1fy={}", t4_r1fy);
     assert_eq!(
@@ -590,7 +592,7 @@ fn read_tiles(s: &str) -> HashMap<TileId, Tile> {
             Err(e) => Err(e),
         })
         .collect();
-    return r.expect(format!("tiles are not in the expected format").as_str());
+    r.unwrap_or_else(|_| panic!("tiles are not in the expected format"))
 }
 
 fn get_edge_keys(m: &ArrayView2<u8>) -> [EdgeKey; 4] {
@@ -661,7 +663,7 @@ fn place(
     solution: &mut TileLocationSolution,
     todo: &mut HashSet<TileId>,
 ) {
-    let tile: &Tile = match tiles.get(&tile_id) {
+    let tile: &Tile = match tiles.get(tile_id) {
         Some(t) => t,
         _ => {
             panic!(
@@ -670,7 +672,7 @@ fn place(
             );
         }
     };
-    if let Some(existing) = solution.get_position_of_tile(&tile_id) {
+    if let Some(existing) = solution.get_position_of_tile(tile_id) {
         panic!(
             "place() was called to place tile id {} but this was already placed at {:?}",
             tile_id, existing
@@ -678,8 +680,8 @@ fn place(
     }
     // This assertion fires if the tile being placed was absent from the todo set (i.e.
     // when `positions` and `todo` have become out-of-sync).
-    assert!(todo.remove(&tile_id));
-    solution.place_tile(&tile, how, pos);
+    assert!(todo.remove(tile_id));
+    solution.place_tile(tile, how, pos);
 }
 
 fn edge_match(
@@ -687,9 +689,9 @@ fn edge_match(
     neighbour_direction: &Direction,
     neighbour: &ArrayView2<u8>,
 ) -> bool {
-    let candidate_edge_key = EdgeKey::from_matrix(neighbour_direction, &candidate);
+    let candidate_edge_key = EdgeKey::from_matrix(neighbour_direction, candidate);
     let neighbour_edge_key =
-        EdgeKey::from_matrix(&opposite_direction(&neighbour_direction), &neighbour);
+        EdgeKey::from_matrix(&opposite_direction(neighbour_direction), neighbour);
     let opposing = neighbour_edge_key.opposing();
     let result = opposing == candidate_edge_key;
     let desc = if result { "match" } else { "no match" };
@@ -746,7 +748,7 @@ fn candidate_fits_neighbours(
         let neighbour: &Tile = tiles.get(&neighbour_id).expect("missing neighbour");
         if !edge_match(
             &candidate_tile.manipulated(&cand.manipulation).view(),
-            &neighbour_direction,
+            neighbour_direction,
             &neighbour.manipulated(&neighbour_manipulation).view(),
         ) {
             log::debug!("candidate_fits_neighbours: no, tile {} cannot be placed at {} becauise it does not match its neighbour {} at {}",
@@ -772,14 +774,11 @@ fn get_candidates(
 ) -> HashMap<TileId, Vec<Manipulation>> {
     let mut result: HashMap<TileId, Vec<Manipulation>> = HashMap::new();
     let empty_pos = get_neighbour(&exposed_edge.pos, exposed_edge.direction);
-    match solution.get_tile_at_position(&empty_pos) {
-        Some((tid, manip)) => {
-            panic!(
-                "unexpectedly, position {} is not empty; it contains tile {} with manipulation {}",
-                empty_pos, tid, manip
-            );
-        }
-        None => (),
+    if let Some((tid, manip)) = solution.get_tile_at_position(&empty_pos) {
+        panic!(
+            "unexpectedly, position {} is not empty; it contains tile {} with manipulation {}",
+            empty_pos, tid, manip
+        );
     };
     for cand in ix
         .get(&exposed_edge.edge_pattern)
@@ -835,13 +834,14 @@ fn solve1x(
                     pos,
                     manipulations.len()
                 );
-                if manipulations.len() > 1 {
-                    log::debug!("Since there's more than one way to fit {} into {} we will defer filling that spot for now.", tile_id, pos);
-                } else {
-                    // We have just one possible tile and just one possible orientation.
-                    for manip in manipulations {
+                match manipulations.as_slice() {
+                    [manip] => {
                         place(tile_id, manip, &pos, tiles, solution, todo);
                         return;
+                    }
+                    [] => (),
+                    _ => {
+                        log::debug!("Since there's more than one way to fit {} into {} we will defer filling that spot for now.", tile_id, pos);
                     }
                 }
             }
@@ -894,7 +894,7 @@ fn min_and_max<T>(things: T) -> (i32, i32)
 where
     T: IntoIterator<Item = i32>,
 {
-    let initial: (i32, i32) = (0 as i32, 0 as i32);
+    let initial = (0_i32, 0_i32);
     things
         .into_iter()
         .fold(initial, |acc, x| (cmp::min(acc.0, x), cmp::max(acc.1, x)))
@@ -915,7 +915,7 @@ fn corners(solution: &TileLocationSolution) -> [Position; 4] {
         Position { x: maxx, y: maxy },
     ];
     for pos in &result {
-        match solution.position_to_tile.get(&pos) {
+        match solution.position_to_tile.get(pos) {
             None => {
                 panic!("solution is not rectangular; {} is not occupied", pos);
             }
@@ -969,7 +969,7 @@ fn part1(tiles: &HashMap<TileId, Tile>) -> Result<TileLocationSolution, String> 
         rot: Rotation::Zero,
         flip: true,
     };
-    let sol = solve1(tiles, &ix, &initial_manip);
+    let sol = solve1(tiles, &ix, initial_manip);
     println!("Part 1: Solution is:\n{}", solution_as_string(&sol));
     println!("Part 1: corner product is {}", corner_product(&sol));
     Ok(sol)
@@ -980,7 +980,7 @@ fn interior_tile_at(
     tiles: &HashMap<TileId, Tile>,
     solution: &TileLocationSolution,
 ) -> Array2<u8> {
-    let tile_id = solution.position_to_tile.get(&pos).expect("missing tile");
+    let tile_id = solution.position_to_tile.get(pos).expect("missing tile");
     let (_, manip) = solution
         .tile_to_position
         .get(tile_id)
@@ -1095,13 +1095,13 @@ fn solve2(tiles: &HashMap<TileId, Tile>, solution: &TileLocationSolution) -> usi
     let big_bitmap = assemble_big_bitmap(tiles, solution);
     log::debug!("big bitmap is:\n{}", render_bitmap(&big_bitmap));
     let nessie_mask = nessie();
-    for rot in vec![
+    for rot in [
         Rotation::Zero,
         Rotation::One,
         Rotation::Two,
         Rotation::Three,
     ] {
-        for flip in vec![false, true] {
+        for flip in [false, true] {
             let manip = Manipulation { rot, flip };
             let tweaked = manip.on(&big_bitmap);
             let locations = find_image_locations(&tweaked, &nessie_mask);

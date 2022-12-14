@@ -130,17 +130,10 @@ impl Parser {
     }
 
     fn prec_is_between(&self, low: i64, t: &Option<Token>, high: i64) -> bool {
-        match self.prec(t) {
-            Ok(p) => {
-                if p < low {
-                    false
-                } else if p > high {
-                    false
-                } else {
-                    true
-                }
-            }
-            _ => false,
+        if let Ok(p) = self.prec(t) {
+            p >= low && p <= high
+        } else {
+            false
         }
     }
 
@@ -230,13 +223,11 @@ fn parse_evaluate_and_total(
     show_calcs: bool,
     rules: &Rules,
 ) -> Result<(), String> {
-    let p = Parser {
-        rules: rules.clone(),
-    };
+    let p = Parser { rules: *rules };
 
     let mut total: i64 = 0;
     for line in input {
-        let tree = p.parse(&line)?;
+        let tree = p.parse(line)?;
         let value = eval(&tree);
         if show_calcs {
             println!("{} -> {}", line, value);

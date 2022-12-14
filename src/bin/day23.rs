@@ -164,7 +164,7 @@ impl CupCircle {
 
         let mut pos_seen: HashSet<usize> = HashSet::new();
         for pos in &self.label_to_pos {
-            if pos_seen.contains(&pos) {
+            if pos_seen.contains(pos) {
                 panic!("duplicate position {}", pos);
             }
             pos_seen.insert(*pos);
@@ -177,7 +177,7 @@ impl CupCircle {
         let lab = label as usize;
         assert!(label > 0);
         assert!((lab - 1) < self.label_to_pos.len());
-        return self.label_to_pos[lab - 1];
+        self.label_to_pos[lab - 1]
     }
 
     fn extend(&mut self, want: u32) {
@@ -247,7 +247,7 @@ impl<'a> IntoIterator for &'a CupCircle {
         self.check();
         CupCircleIter {
             pos: if self.cups.is_empty() { None } else { Some(0) },
-            circle: &self,
+            circle: self,
         }
     }
 }
@@ -295,7 +295,7 @@ fn part1(initial: &Vec<u32>) -> Result<(), String> {
         print!("{}", cup.label);
         pos = cup.succ as usize;
     }
-    println!("");
+    println!();
     Ok(())
 }
 

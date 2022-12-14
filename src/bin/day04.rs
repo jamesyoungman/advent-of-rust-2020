@@ -34,7 +34,7 @@ fn two_fields(delimiter: char, s: &str) -> Result<(String, String), &'static str
 }
 
 impl Passport {
-    fn new(lines: &Vec<String>) -> Passport {
+    fn new(lines: &[String]) -> Passport {
         let mut h: HashMap<String, String> = HashMap::new();
         for setting in lines.iter().flat_map(|line| line.split_whitespace()) {
             match two_fields(':', setting) {
@@ -76,7 +76,7 @@ impl Passport {
     }
 
     fn valid_hair_colour(&self) -> bool {
-        return self.attr_matches("hcl", &HAIR_COLOUR_RE);
+        self.attr_matches("hcl", &HAIR_COLOUR_RE)
     }
 
     fn valid_eye_colour(&self) -> bool {
@@ -96,8 +96,8 @@ impl Passport {
                 }
                 match cap[1].parse::<i32>() {
                     Ok(n) => match &cap[2] {
-                        "cm" => n >= 150 && n <= 193,
-                        "in" => n >= 59 && n <= 76,
+                        "cm" => (150..=193).contains(&n),
+                        "in" => (59..=76).contains(&n),
                         _ => false,
                     },
                     Err(_) => false,
@@ -123,11 +123,11 @@ impl Passport {
     }
 }
 
-fn part1(input: &Vec<Passport>) -> usize {
+fn part1(input: &[Passport]) -> usize {
     input.iter().filter(|p| p.valid1()).count()
 }
 
-fn part2(input: &Vec<Passport>) -> usize {
+fn part2(input: &[Passport]) -> usize {
     input.iter().filter(|p| p.valid2()).count()
 }
 fn read_input(reader: impl BufRead) -> Result<Vec<Passport>, io::Error> {

@@ -61,7 +61,7 @@ impl BagDefs {
         parent.add_required_child(child_colour, quantity);
 
         let child: &mut Bag = self.get_or_add_bag(child_colour);
-        child.add_allowed_parent(&parent_colour.to_string());
+        child.add_allowed_parent(parent_colour);
     }
 
     fn new() -> BagDefs {
@@ -85,7 +85,7 @@ impl BagDefs {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn possible_parents(&self, colour_wanted: &str) -> Vec<String> {
@@ -117,19 +117,19 @@ impl BagDefs {
 }
 
 fn parse_line(orig_line: &str) -> (String, HashMap<String, u64>) {
-    let line = orig_line.trim_end_matches(".");
+    let line = orig_line.trim_end_matches('.');
     let cap = match LINE_RE.captures(line) {
         None => {
             panic!("malformed line '{}'", line);
         }
         Some(cap) => cap,
     };
-    let parent_colour = (&cap[1]).to_string();
+    let parent_colour = cap[1].to_string();
     let contents_str = &cap[2];
     if EMPTY_RE.is_match(contents_str) {
-        return (parent_colour.to_string(), HashMap::new());
+        return (parent_colour, HashMap::new());
     }
-    let items: Vec<&str> = contents_str.split(",").collect();
+    let items: Vec<&str> = contents_str.split(',').collect();
     if items.is_empty() {
         panic!(
             "every non-empty bag should have contents: '{}' does not",
@@ -147,7 +147,7 @@ fn parse_line(orig_line: &str) -> (String, HashMap<String, u64>) {
             }
             Some(cap) => cap,
         };
-        contents.insert((&cap[2]).to_string(), cap[1].parse().unwrap());
+        contents.insert(cap[2].to_string(), cap[1].parse().unwrap());
     }
     (parent_colour, contents)
 }
@@ -159,7 +159,7 @@ fn run() -> Result<(), std::io::Error> {
             Ok(line) => {
                 let (parent_colour, contents) = parse_line(&line);
                 for (child_colour, quantity) in contents.iter() {
-                    definitions.add_bag(&parent_colour, &child_colour, quantity);
+                    definitions.add_bag(&parent_colour, child_colour, quantity);
                 }
             }
             Err(e) => return Err(e),

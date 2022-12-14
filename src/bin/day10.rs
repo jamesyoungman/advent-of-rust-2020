@@ -80,7 +80,7 @@ fn find_run_lengths(ratings: &Vec<i64>) -> Vec<i64> {
     runs
 }
 
-fn bookend(ratings: &Vec<i64>, first: i64, last: i64) -> Vec<i64> {
+fn bookend(ratings: &[i64], first: i64, last: i64) -> Vec<i64> {
     itertools::chain(
         itertools::chain(std::iter::once(first), ratings.iter().cloned()),
         std::iter::once(last),
@@ -111,11 +111,8 @@ impl TribEval {
         while largest < wanted {
             largest += 1;
             let v = self.known.values().rev().take(3).sum();
-            match self.known.insert(largest, v) {
-                Some(_) => {
-                    panic!("conflicting updates for tribonacci values");
-                }
-                None => (), // this is the usual case.
+            if self.known.insert(largest, v).is_some() {
+                panic!("conflicting updates for tribonacci values");
             };
         }
         match self.known.get(&wanted) {
@@ -138,13 +135,13 @@ fn self_test() {
     assert_eq!(te.tribonacci(6), 24);
 }
 
-fn part2(ratings: &Vec<i64>, my_device_rating: i64) -> i64 {
+fn part2(ratings: &[i64], my_device_rating: i64) -> i64 {
     // Based on a hint from reddit.com/r/AdventOfCode.
     let runs = find_run_lengths(&bookend(ratings, 0, my_device_rating));
     let mut result: i64 = 1;
     let mut te = TribEval::new();
     for run_len in runs {
-        result = result * te.tribonacci(run_len);
+        result *= te.tribonacci(run_len);
     }
     println!("Part 2: answer is {}", result);
     result

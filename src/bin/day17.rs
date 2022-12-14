@@ -1,16 +1,15 @@
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::RangeInclusive;
-use std::io::{self, Read};
-use std::cmp::{min, max};
 use std::fmt;
+use std::io::{self, Read};
+use std::ops::RangeInclusive;
 
 type Ordinate = i64;
 type OrdinateRange = RangeInclusive<i64>;
 
-#[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
-struct Pos4
-{
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Pos4 {
     x: Ordinate,
     y: Ordinate,
     z: Ordinate,
@@ -26,199 +25,195 @@ struct Lattice {
     zrange: OrdinateRange,
     wrange: OrdinateRange,
     active: Pos4Set,
-    use_w: bool
+    use_w: bool,
 }
 
 fn update_range(n: &Ordinate, r: OrdinateRange) -> OrdinateRange {
     if r.contains(n) {
-	r
+        r
     } else {
-	min(*n, *r.start())..=max(*n, *r.end())
+        min(*n, *r.start())..=max(*n, *r.end())
     }
 }
 
-
 fn range_size(r: &OrdinateRange) -> usize {
     if r.end() < r.start() {
-	0
+        0
     } else {
-	let result: Ordinate = r.end() - r.start() + 1;
-	assert!(result > 0);
-	result as usize
+        let result: Ordinate = r.end() - r.start() + 1;
+        assert!(result > 0);
+        result as usize
     }
 }
 
 impl Clone for Lattice {
     fn clone(&self) -> Lattice {
-	Lattice{
-	    xrange: self.xrange.clone(),
-	    yrange: self.yrange.clone(),
-	    zrange: self.zrange.clone(),
-	    wrange: self.wrange.clone(),
-	    active: self.active.clone(),
-	    use_w: self.use_w,
-	}
+        Lattice {
+            xrange: self.xrange.clone(),
+            yrange: self.yrange.clone(),
+            zrange: self.zrange.clone(),
+            wrange: self.wrange.clone(),
+            active: self.active.clone(),
+            use_w: self.use_w,
+        }
     }
 }
 
 impl Lattice {
     fn popcount(&self) -> usize {
-	self.active.len()
+        self.active.len()
     }
 
     fn slice_as_str(&self, w: Ordinate, z: Ordinate) -> String {
-	let mut output = String::with_capacity(
-	    (range_size(&self.xrange) + 1) * range_size(&self.yrange));
-	for y in self.yrange.clone() {
-	    for x in self.xrange.clone() {
-		let pos = Pos4{x, y, z, w};
-		output.push(if self.active.contains(&pos) {'#'} else {'.'})
-	    }
-	    output.push('\n');
-	}
-	output
+        let mut output =
+            String::with_capacity((range_size(&self.xrange) + 1) * range_size(&self.yrange));
+        for y in self.yrange.clone() {
+            for x in self.xrange.clone() {
+                let pos = Pos4 { x, y, z, w };
+                output.push(if self.active.contains(&pos) { '#' } else { '.' })
+            }
+            output.push('\n');
+        }
+        output
     }
 
     fn from_string(s: &str) -> Result<Lattice, String> {
-	let mut xrange: OrdinateRange = 0..=0;
-	let mut yrange: OrdinateRange = 0..=0;
-	let mut x = 0;
-	let mut y = 0;
-	let mut cells: Pos4Set = Pos4Set::new();
-	for ch in s.chars() {
-	    match ch {
-		'#' => {
-		    cells.insert(Pos4{x, y, z: 0, w: 0});
-		    xrange = update_range(&x, xrange.clone());
-		    yrange = update_range(&y, yrange.clone());
-		    x += 1;
-		}
-		'.' => {
-		    x += 1;
-		}
-		'\n' => {
-		    x = 0;
-		    y += 1;
-		}
-		_ => {
-		    return Err(format!("unexpected character '{}' in input", ch));
-		}
-	    }
-	}
-	Ok(Lattice{
-	    xrange,
-	    yrange,
-	    zrange: 0..=0,
-	    wrange: 0..=0,
-	    active: cells,
-	    use_w: false,
-	})
+        let mut xrange: OrdinateRange = 0..=0;
+        let mut yrange: OrdinateRange = 0..=0;
+        let mut x = 0;
+        let mut y = 0;
+        let mut cells: Pos4Set = Pos4Set::new();
+        for ch in s.chars() {
+            match ch {
+                '#' => {
+                    cells.insert(Pos4 { x, y, z: 0, w: 0 });
+                    xrange = update_range(&x, xrange.clone());
+                    yrange = update_range(&y, yrange.clone());
+                    x += 1;
+                }
+                '.' => {
+                    x += 1;
+                }
+                '\n' => {
+                    x = 0;
+                    y += 1;
+                }
+                _ => {
+                    return Err(format!("unexpected character '{}' in input", ch));
+                }
+            }
+        }
+        Ok(Lattice {
+            xrange,
+            yrange,
+            zrange: 0..=0,
+            wrange: 0..=0,
+            active: cells,
+            use_w: false,
+        })
     }
 
     fn neighbours_of(&self, pos: &Pos4) -> Vec<Pos4> {
-	let wrange = if self.use_w {
-	    (pos.w-1)..=(pos.w+1)
-	} else {
-	    pos.w..=pos.w
-	};
-	let mut result = Vec::with_capacity(range_size(&wrange) * 3 * 3 * 3);
-	for w in wrange {
-	    for z in (pos.z-1)..=(pos.z+1) {
-		for y in (pos.y-1)..=(pos.y+1) {
-		    for x in (pos.x-1)..=(pos.x+1) {
-			let neighbour = Pos4{w, z, y, x};
-			if neighbour != *pos { // can't be my own neighbour
-			    result.push(neighbour);
-			}
-		    }
-		}
-	    }
-	}
-	result
+        let wrange = if self.use_w {
+            (pos.w - 1)..=(pos.w + 1)
+        } else {
+            pos.w..=pos.w
+        };
+        let mut result = Vec::with_capacity(range_size(&wrange) * 3 * 3 * 3);
+        for w in wrange {
+            for z in (pos.z - 1)..=(pos.z + 1) {
+                for y in (pos.y - 1)..=(pos.y + 1) {
+                    for x in (pos.x - 1)..=(pos.x + 1) {
+                        let neighbour = Pos4 { w, z, y, x };
+                        if neighbour != *pos {
+                            // can't be my own neighbour
+                            result.push(neighbour);
+                        }
+                    }
+                }
+            }
+        }
+        result
     }
 
     fn insert(&mut self, pos: Pos4) {
-	if !self.use_w {
-	    assert!(pos.w == 0)
-	}
-	self.active.insert(pos);
-	self.xrange = update_range(&pos.x, self.xrange.clone());
-	self.yrange = update_range(&pos.y, self.yrange.clone());
-	self.zrange = update_range(&pos.z, self.zrange.clone());
-	self.wrange = update_range(&pos.w, self.wrange.clone());
+        if !self.use_w {
+            assert!(pos.w == 0)
+        }
+        self.active.insert(pos);
+        self.xrange = update_range(&pos.x, self.xrange.clone());
+        self.yrange = update_range(&pos.y, self.yrange.clone());
+        self.zrange = update_range(&pos.z, self.zrange.clone());
+        self.wrange = update_range(&pos.w, self.wrange.clone());
     }
 
     fn count_neighbours(&self) -> Pos4Counter {
-	let mut neighbour_count: Pos4Counter = Pos4Counter::new();
-	for neighbour in self.active.iter()
-	    .flat_map(|pos| self.neighbours_of(&pos)) {
-		neighbour_count.entry(neighbour)
-		    .and_modify(|e| *e += 1)
-		    .or_insert(1);
-	    }
-	neighbour_count
+        let mut neighbour_count: Pos4Counter = Pos4Counter::new();
+        for neighbour in self.active.iter().flat_map(|pos| self.neighbours_of(pos)) {
+            neighbour_count
+                .entry(neighbour)
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
+        }
+        neighbour_count
     }
 
     fn decide_actives(&self, neighbour_count: &Pos4Counter) -> Lattice {
-	let mut result = Lattice{
-	    xrange: 0..=0,
-	    yrange: 0..=0,
-	    zrange: 0..=0,
-	    wrange: 0..=0,
-	    use_w: self.use_w,
-	    active: Pos4Set::new(),
-	};
-	for p in itertools::chain(
-	    // First, consider possible state changes in the cells
-	    // that are currently active.
-	    self.active.iter()
-		.filter(|currently_active|
-			match neighbour_count.get(&currently_active) {
-			    // Active cells with 3 active neighbours
-			    // are inserted as a result of the pipeline
-			    // acting on neighbour_count, below, and so
-			    // we omit them here to avoid duplicate work.
-			    Some(2) => true, // remains active
-			    _ => false,	// becomes inactive
-			}),
-	    // Second, consider possible state changes in the cells
-	    // that are not currently active.
-	    neighbour_count.iter()
-	    // The filter acceps cells that are inactive but will
-	    // become active, and also active cells with 3 neighbours
-	    // (which should stay active).
-		.filter(|(_, num_neighbours)| **num_neighbours == 3)
-		.map(|(pos, _)| pos)) {
-	    result.insert(*p)	// updates ranges also.
-	}
-	result
+        let mut result = Lattice {
+            xrange: 0..=0,
+            yrange: 0..=0,
+            zrange: 0..=0,
+            wrange: 0..=0,
+            use_w: self.use_w,
+            active: Pos4Set::new(),
+        };
+        for p in itertools::chain(
+            // First, consider possible state changes in the cells
+            // that are currently active.
+            self.active.iter().filter(|currently_active| {
+                // Active cells with 3 active neighbours are inserted
+                // as a result of the pipeline acting on
+                // neighbour_count, below, and so we omit them here to
+                // avoid duplicate work.
+                matches!(neighbour_count.get(currently_active), Some(2))
+            }),
+            // Second, consider possible state changes in the cells
+            // that are not currently active.
+            neighbour_count
+                .iter()
+                // The filter acceps cells that are inactive but will
+                // become active, and also active cells with 3 neighbours
+                // (which should stay active).
+                .filter(|(_, num_neighbours)| **num_neighbours == 3)
+                .map(|(pos, _)| pos),
+        ) {
+            result.insert(*p) // updates ranges also.
+        }
+        result
     }
 
     fn iterate(&self) -> Lattice {
-	let neighbour_count = self.count_neighbours();
-	self.decide_actives(&neighbour_count)
+        let neighbour_count = self.count_neighbours();
+        self.decide_actives(&neighbour_count)
     }
 }
 
 impl fmt::Display for Lattice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-	for w in self.wrange.clone() {
-	    for z in self.zrange.clone() {
-		match write!(f, "z={},w={}\n{}", z, w, self.slice_as_str(w, z)) {
-		    Err(e) => { return Err(e); }
-		    _ => ()
-		}
-	    }
-	}
-	Ok(())
+        for w in self.wrange.clone() {
+            for z in self.zrange.clone() {
+                write!(f, "z={},w={}\n{}", z, w, self.slice_as_str(w, z))?
+            }
+        }
+        Ok(())
     }
 }
 
 fn read_input() -> Result<Lattice, String> {
     let mut buffer = String::new();
     match io::stdin().read_to_string(&mut buffer) {
-	Ok(_) => Lattice::from_string(&buffer),
-	Err(e) => Err(format!("I/O error: {}", e))
+        Ok(_) => Lattice::from_string(&buffer),
+        Err(e) => Err(format!("I/O error: {}", e)),
     }
 }
 
@@ -227,12 +222,15 @@ fn part_n(part_num: i32, initial: &Lattice, num_cycles: usize, use_w: bool) {
     begin.use_w = use_w;
     let mut current: Lattice = begin.iterate();
     for _iteration in 1..num_cycles {
-	current = current.iterate();
+        current = current.iterate();
     }
-    println!("Part {}: after {} iterations, population is {}",
-	     part_num, num_cycles, current.popcount());
+    println!(
+        "Part {}: after {} iterations, population is {}",
+        part_num,
+        num_cycles,
+        current.popcount()
+    );
 }
-
 
 fn run() -> Result<(), String> {
     let initial = read_input()?;
@@ -244,10 +242,10 @@ fn run() -> Result<(), String> {
 
 fn main() {
     std::process::exit(match run() {
-	Ok(_) => 0,
-	Err(err) => {
-	    eprintln!("error: {:?}", err);
-	    1
-	}
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("error: {:?}", err);
+            1
+        }
     });
 }

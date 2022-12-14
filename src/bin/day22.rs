@@ -18,7 +18,7 @@ lazy_static! {
 
 type Card = u32;
 
-fn get_deck(who: i32, lines: &Vec<String>) -> Result<VecDeque<Card>, String> {
+fn get_deck(who: i32, lines: &[String]) -> Result<VecDeque<Card>, String> {
     let mut result: VecDeque<Card> = VecDeque::new();
     let mut player = 0;
     for line in lines.iter().filter(|s| !s.is_empty()) {
@@ -60,7 +60,7 @@ impl Clone for PlayerHand {
 }
 
 impl PlayerHand {
-    fn new(who: i32, config_lines: &Vec<String>) -> Result<PlayerHand, String> {
+    fn new(who: i32, config_lines: &[String]) -> Result<PlayerHand, String> {
         let cards = get_deck(who, config_lines)?;
         Ok(PlayerHand { cards })
     }
@@ -123,7 +123,7 @@ impl Clone for GameState {
 }
 
 impl GameState {
-    fn new(lines: &Vec<String>) -> Result<GameState, String> {
+    fn new(lines: &[String]) -> Result<GameState, String> {
         let p1 = PlayerHand::new(1, lines)?;
         let p2 = PlayerHand::new(2, lines)?;
         Ok(GameState { p1, p2 })
@@ -167,7 +167,7 @@ impl GameState {
     fn play_one_basic_round(&mut self, round: i32) -> bool {
         log::info!("\n--Round {} --\n", round);
         if log::log_enabled!(log::Level::Debug) {
-            for s in self.decks_as_string().split("\n") {
+            for s in self.decks_as_string().split('\n') {
                 log::debug!("{}", s);
             }
         }
@@ -209,7 +209,7 @@ impl GameState {
             log::debug!("");
             log::debug!("-- Round {} (Game {}) --", round, this_game);
             if log::log_enabled!(log::Level::Info) {
-                for s in self.decks_as_string().split("\n") {
+                for s in self.decks_as_string().split('\n') {
                     log::info!("{}", s);
                 }
             }
@@ -234,12 +234,10 @@ impl GameState {
                 log::debug!("Playing a sub-game to determine the winner...");
                 let (winner, _, _) = subgame.play_recursive(game_counter);
                 winner
+            } else if c2 > c1 {
+                2
             } else {
-                if c2 > c1 {
-                    2
-                } else {
-                    1
-                }
+                1
             };
             log::debug!(
                 "Player {} wins round {} of game {}!",
@@ -264,7 +262,7 @@ impl GameState {
     }
 }
 
-fn part1(lines: &Vec<String>) -> Result<(), String> {
+fn part1(lines: &[String]) -> Result<(), String> {
     let mut game_state = GameState::new(lines)?;
     let (winner, hand, score) = game_state.play_basic();
     println!(
@@ -274,7 +272,7 @@ fn part1(lines: &Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn part2(lines: &Vec<String>) -> Result<(), String> {
+fn part2(lines: &[String]) -> Result<(), String> {
     let mut game_counter: usize = 1;
     let mut game_state = GameState::new(lines)?;
     let (winner, _, score) = game_state.play_recursive(&mut game_counter);
